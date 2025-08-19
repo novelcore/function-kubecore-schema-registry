@@ -1,4 +1,4 @@
-# Corrected Phase 1 Test Composition
+# Fixed Composition - Template Error Corrected
 ---
 apiVersion: apiextensions.crossplane.io/v1
 kind: CompositeResourceDefinition
@@ -70,20 +70,6 @@ spec:
       traversalDepth: 3
       includeFullSchema: true
 
-  - step: update-composite-status
-    functionRef:
-      name: function-go-templating
-    input:
-      apiVersion: gotemplating.fn.crossplane.io/v1beta1
-      kind: GoTemplate
-      source: Inline
-      inline:
-        template: |+
-          {{ $schemaData := index .context "kubecore.schemaRegistry.detailedStatus" }}
-          {{ if $schemaData }}
-          {{ $statusData := fromJson $schemaData.string_value }}
-          {{ end }}
-
   - step: create-configmap
     functionRef:
       name: function-go-templating
@@ -117,7 +103,9 @@ spec:
                   githubProjectRef: "{{ $ctx.spec.githubProjectRef.name }}"
                   transitiveDiscovery: "{{ $ctx.spec.enableTransitiveDiscovery }}"
                   {{ if $schemaData }}
-                  schemaRegistryResults: {{ $schemaData.string_value | quote }}
+                  schemaRegistryResults: {{ $schemaData | quote }}
+                  {{ else }}
+                  schemaRegistryResults: "No schema data available"
                   {{ end }}
             providerConfigRef:
               name: kubesys-enhanced
