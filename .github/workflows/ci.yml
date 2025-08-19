@@ -24,7 +24,7 @@ env:
   XP_VERSION: v1.20.0
 
   # The package to push, without a version tag. The default matches GitHub. For
-  # example xpkg.crossplane.io/crossplane/function-template-go. Note that
+  # example xpkg.crossplane.io/crossplane/function-kubecore-schema-registry. Note that
   # xpkg.crossplane.io is just an alias for ghcr.io, so we upload to ghcr.io but
   # this'll be pulled from xpkg.crossplane.io.
   XPKG: ghcr.io/${{ github.repository}}

@@ -1,6 +1,6 @@
 To get started:
 
-1. Replace `function-template-go` with your function in `go.mod`,
+1. Replace `function-kubecore-schema-registry` with your function in `go.mod`,
    `package/crossplane.yaml`, and any Go imports. (You can also do this
    automatically by running the `./init.sh <function-name>` script.)
 2. Update `input/v1beta1/` to reflect your desired input (and run `go generate ./...`)
