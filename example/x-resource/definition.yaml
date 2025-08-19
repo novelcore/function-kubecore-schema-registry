@@ -1,0 +1,56 @@
+# Composition Resource Definition
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xschemaregistries.platform.kubecore.io
+spec:
+  group: platform.kubecore.io
+  names:
+    kind: XSchemaRegistry
+    plural: xschemaregistries
+  versions:
+  - name: v1alpha1
+    served: true
+    referenceable: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              githubProjectRef:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  namespace:
+                    type: string
+                required:
+                - name
+              enableTransitiveDiscovery:
+                type: boolean
+                default: true
+              traversalDepth:
+                type: integer
+                default: 3
+            required:
+            - githubProjectRef
+          status:
+            type: object
+            properties:
+              context:
+                type: object
+                properties:
+                  resourceType:
+                    type: string
+                  resourceName:
+                    type: string
+                  resourceNamespace:
+                    type: string
+                  directReferences:
+                    type: array
+                    items:
+                      type: string
+                  transitiveDiscoveryEnabled:
+                    type: boolean

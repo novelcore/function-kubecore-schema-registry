@@ -1,0 +1,34 @@
+# GitHub Project – defines the Git repo and provider configuration for all associated GitHubApps
+apiVersion: github.platform.kubecore.io/v1alpha1
+kind: GitHubProject
+metadata:
+  name: demo-project
+  namespace: test
+spec:
+  description: "Demo project managed by KubeCore"
+  visibility: private
+  repositorySource:
+    type: template
+    template:
+      owner: novelcore
+      repository: kubeproject-template
+      includeAllBranches: false
+
+  # Team Configuration - defines GitHub teams and their members
+  teamConfiguration:
+    parentTeams:
+      main: "12972099"
+    teamMembers:
+      software:
+      - username: "AbstractVersion"
+        role: "maintainer"
+      ops:
+      - username: "AbstractVersion"
+        role: "maintainer"
+      business:
+      - username: "dfourakis"
+        role: "member"
+
+  # Provider Resolution - reference the GithubProvider to derive ProviderConfig dynamically
+  githubProviderRef:
+    name: github-provider

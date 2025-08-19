@@ -1,0 +1,322 @@
+---
+# KubeSystem with network configuration
+apiVersion: platform.kubecore.io/v1alpha1
+kind: KubeSystem
+metadata:
+  name: demo-kubesystem
+  namespace: test
+spec:
+  # Reference to KubeCluster for provider configs and cluster integration
+  kubeClusterRef:
+    name: demo-cluster # Reference to existing KubeCluster claim
+
+  # Deployment configuration
+  deploymentType: single
+
+  # Global Repository Configuration (for private Helm repositories)
+  repository:
+    auth:
+      secretRef:
+        name: repository-auth-secret
+        namespace: crossplane-system
+        usernameKey: username # Key in the secret containing the username
+        passwordKey: password # Key in the secret containing the password/token
+
+  # Environment Configuration
+  environment:
+    parentEnvironment: platform-defaults
+    generateInstanceEnvironment: true
+
+  # Tools Configuration
+  tools:
+    # Core Components (minimal for testing)
+    crossplane:
+      enabled: true
+      version: "1.20.0"
+      namespace: crossplane-system
+      controller:
+        resources:
+          limits:
+            cpu: 500m
+            memory: 1Gi
+          requests:
+            cpu: 100m
+            memory: 256Mi
+
+    # Cert-manager (required for Traefik cluster issuer)
+    certManager:
+      enabled: true
+      version: v1.17.1
+      namespace: cert-manager
+      resources:
+        controller:
+          limits:
+            cpu: 200m
+            memory: 256Mi
+          requests:
+            cpu: 50m
+            memory: 128Mi
+
+    # Traefik Configuration (REQUIRED for ExternalDNS integration)
+    traefik:
+      enabled: true # MUST be enabled for ExternalDNS
+      version: "35.0.0"
+      namespace: traefik
+      replicas: 1
+      service:
+        type: LoadBalancer # Restored to LoadBalancer with explicit subnet selection
+        annotations:
+          service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+          service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
+          # Dynamic subnet selection from KubeNet public subnets (managed by composition)
+      resources:
+        limits:
+          cpu: 500m
+          memory: 512Mi
+        requests:
+          cpu: 100m
+          memory: 256Mi
+      ingressClass:
+        enabled: true
+        isDefaultClass: true
+        name: traefik-system
+      clusterIssuer:
+        enabled: true
+        email: admin@kubecore.eu
+        name: test-cluster-issuer
+      metrics:
+        enabled: false
+      dashboard:
+        enabled: false
+
+    # ExternalDNS Configuration (NEW)
+    externalDns:
+      enabled: true
+      version: "1.18.0"
+      namespace: external-dns
+      policy: sync
+      registry: txt
+      txtPrefix: "external-dns-"
+      interval: "1m"
+      logLevel: info
+      logFormat: text
+      # IRSA role is now created dynamically by the KubeSystem composition
+      # No need to specify roleArn manually
+      sources:
+      - service
+      - ingress
+      - crd
+      resources:
+        limits:
+          cpu: 250m
+          memory: 256Mi
+        requests:
+          cpu: 100m
+          memory: 128Mi
+      metrics:
+        enabled: true
+
+    # Other components (enabled for testing)
+    argocd:
+      enabled: true
+      version: "8.0.0"
+      namespace: argocd
+      server:
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 250m
+            memory: 256Mi
+        ingress:
+          enabled: true
+          tls: true
+        autoscaling:
+          enabled: false
+      repoServer:
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 250m
+            memory: 256Mi
+        autoscaling:
+          enabled: false
+      controller:
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+          requests:
+            cpu: 500m
+            memory: 512Mi
+      dex:
+        enabled: true
+      notifications:
+        enabled: true
+      applicationSet:
+        enabled: true
+
+    # Argo Rollouts Configuration
+    argoRollouts:
+      enabled: true
+      version: "2.39.6"
+      namespace: argo-rollouts
+      controller:
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 250m
+            memory: 256Mi
+        metrics:
+          enabled: true
+          servicePort: 8090
+      dashboard:
+        enabled: true
+        resources:
+          limits:
+            cpu: 100m
+            memory: 128Mi
+          requests:
+            cpu: 50m
+            memory: 64Mi
+        ingress:
+          enabled: false
+          tls: true
+      configuration:
+        trafficManagement:
+          nginx:
+            enabled: false
+          istio:
+            enabled: false
+          alb:
+            enabled: false
+        analysisProviders:
+          prometheus:
+            enabled: true
+          datadog:
+            enabled: false
+          newrelic:
+            enabled: false
+          graphite:
+            enabled: false
+          cloudwatch:
+            enabled: false
+          gatewayAPI:
+            enabled: false
+
+    # Argo Events Configuration
+    argoEvents:
+      enabled: true
+      version: "2.4.16"
+      namespace: argo-events
+      controller:
+        replicas: 1
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 250m
+            memory: 256Mi
+        metrics:
+          enabled: false
+          servicePort: 8082
+      webhook:
+        enabled: false
+        replicas: 1
+        resources:
+          limits:
+            cpu: 200m
+            memory: 256Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+      rbac:
+        enabled: true
+        namespaced: false
+
+    argoWorkflows:
+      enabled: true
+      version: "0.45.12"
+      namespace: argo-workflows
+      server:
+        ingress:
+          enabled: true
+          tls: true
+        sso:
+          enabled: false
+          issuer: "https://auth.mycompany.com"
+          clientId:
+            secretName: "argo-workflows-oidc"
+            secretKey: "client-id"
+          clientSecret:
+            secretName: "argo-workflows-oidc"
+            secretKey: "client-secret"
+          redirectUrl: "https://workflows.mycompany.com/oauth2/callback"
+      artifactRepository:
+        s3:
+          enabled: false
+          bucket: "my-workflows-artifacts"
+          endpoint: "minio.mycompany.com"
+
+    # GitOps Promoter Configuration (NEW)
+    gitopsPromoter:
+      enabled: true
+      version: "0.3.6"
+      namespace: gitops-promoter
+
+      # Repository authentication is now configured globally above
+
+      # Ingress configuration for webhook receiver
+      ingress:
+        enabled: true
+        # hostname will be auto-generated as: promoter-webhook.system.sexy.kubecore.eu
+        # You can override it by specifying: hostname: "custom-webhook.sexy.kubecore.eu"
+        path: "/"
+        pathType: "Prefix"
+        tls:
+          enabled: true
+          # secretName will be auto-generated if not specified
+
+          # Controller configuration settings
+      controllerConfiguration:
+        enabled: true
+        argocdCommitStatusRequeueDuration: "120s"
+        changeTransferPolicyRequeueDuration: "5m"
+        promotionStrategyRequeueDuration: "5m"
+        pullRequestRequeueDuration: "5m"
+
+      # Resource configuration
+      resources:
+        limits:
+          cpu: 500m
+          memory: 128Mi
+        requests:
+          cpu: 10m
+          memory: 64Mi
+
+      # Monitoring configuration
+      monitoring:
+        serviceMonitor:
+          enabled: false # Set to true if you have Prometheus monitoring enabled
+
+  # Network Configuration - References KubeNet for DNS zone
+  network:
+    kubenetRef:
+      name: demo-network # References the KubeNet created above
+    domainPrefix: system # ExternalDNS will automatically create DNS records for ingresses
+  # Provider Configuration References (optional - overrides cluster defaults)
+  # If not specified, will use providerConfigs from the referenced KubeCluster
+  # providerConfigRef:
+  #   helm: demo-cluster-helm
+  #   kubernetes: demo-cluster-kubernetes
+  #   aws: aws-default # REQUIRED for DNS record creation
+  # # Connection secret
+  # writeConnectionSecretToRef:
+  #   name: demo-kubesystem-connection
+  #   namespace: test

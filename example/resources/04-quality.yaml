@@ -1,0 +1,652 @@
+# apiVersion: argoproj.io/v1alpha1
+# kind: ClusterWorkflowTemplate
+# metadata:
+#   name: driveby-essential-validation
+#   namespace: argo
+# spec:
+#   serviceAccountName: argo-workflow
+#   arguments:
+#     parameters:
+#       - name: openapi-spec-url
+#         description: "URL to OpenAPI specification"
+#       - name: api-host
+#         description: "API host to test"
+#       - name: api-port
+#         description: "API port (default: 8080)"
+#         value: "8080"
+#       - name: api-protocol
+#         description: "API protocol (http/https)"
+#         value: "http"
+#       - name: environment
+#         description: "Environment name"
+#         value: "production"
+#       - name: github-owner
+#         description: "GitHub repository owner"
+#       - name: github-repo
+#         description: "GitHub repository name"
+#       - name: github-pr-number
+#         description: "GitHub PR number for commenting"
+#       - name: github-app-id
+#         description: "GitHub App ID"
+#       - name: github-installation-id
+#         description: "GitHub App Installation ID"
+#       - name: github-private-key
+#         description: "GitHub App private key (base64 encoded)"
+  
+#   templates:
+#     - name: essential-validation
+#       container:
+#         image: driveby:latest
+#         command: ["./driveby"]
+#         args:
+#           - "validate-only"
+#           - "--openapi"
+#           - "{{workflow.parameters.openapi-spec-url}}"
+#           - "--host"
+#           - "{{workflow.parameters.api-host}}"
+#           - "--port"
+#           - "{{workflow.parameters.api-port}}"
+#           - "--protocol"
+#           - "{{workflow.parameters.api-protocol}}"
+#           - "--environment"
+#           - "{{workflow.parameters.environment}}"
+#           - "--validation-mode"
+#           - "minimal"
+#           - "--report-dir"
+#           - "/tmp/reports"
+#           - "--log-level"
+#           - "info"
+#           - "--github-comment"
+#           - "--github-app-id"
+#           - "{{workflow.parameters.github-app-id}}"
+#           - "--github-installation-id"
+#           - "{{workflow.parameters.github-installation-id}}"
+#           - "--github-private-key"
+#           - "{{workflow.parameters.github-private-key}}"
+#           - "--github-owner"
+#           - "{{workflow.parameters.github-owner}}"
+#           - "--github-repo"
+#           - "{{workflow.parameters.github-repo}}"
+#           - "--github-pr-number"
+#           - "{{workflow.parameters.github-pr-number}}"
+#         env:
+#           - name: GITHUB_PRIVATE_KEY
+#             value: "{{workflow.parameters.github-private-key}}"
+#         volumeMounts:
+#           - name: reports-volume
+#             mountPath: /tmp/reports
+#         resources:
+#           requests:
+#             memory: "256Mi"
+#             cpu: "250m"
+#           limits:
+#             memory: "512Mi"
+#             cpu: "500m"
+      
+#     - name: save-validation-report
+#       container:
+#         image: alpine:latest
+#         command: ["sh", "-c"]
+#         args:
+#           - |
+#             echo "Saving validation report..."
+#             cp /tmp/reports/* /shared/reports/ || true
+#             echo "Validation report saved"
+#         volumeMounts:
+#           - name: reports-volume
+#             mountPath: /tmp/reports
+#           - name: shared-reports
+#             mountPath: /shared/reports
+  
+#   volumes:
+#     - name: reports-volume
+#       emptyDir: {}
+#     - name: shared-reports
+#       persistentVolumeClaim:
+#         claimName: driveby-reports-pvc
+  
+#   steps:
+#     - - name: validate-essential
+#         template: essential-validation
+#     - - name: save-report
+#         template: save-validation-report
+#         when: "{{steps.validate-essential.outputs.result}} == 'success'"
+  
+#   outputs:
+#     parameters:
+#       - name: validation-status
+#         value: "{{steps.validate-essential.outputs.result}}"
+#       - name: validation-report-path
+#         value: "/shared/reports/validation-report-{{workflow.creationTimestamp}}.json"
+#         when: "{{steps.validate-essential.outputs.result}} == 'success'" 
+# ---
+# Enhanced Security Scan QualityGate - Embedded Workflow Schema Example
+# ======================================================================
+# This example demonstrates the new embedded workflow schema approach as defined in:
+# docs/chats/QUALITY_GATE_EMBEDDED_WORKFLOW_DESIGN.md
+#
+# KEY FEATURES:
+# - Complete workflow definition embedded within the QualityGate
+# - GitHub event triggers with payload-to-parameter mapping
+# - Multi-step security scanning (SAST + dependency audit)
+# - Commit status reporting configuration
+# - Self-contained - no external template dependencies
+#
+# ARCHITECTURE:
+# - Control Plane: QualityGate defines complete workflow schema
+# - GitOps: XApp composition generates WorkflowTemplate, Sensor, EventSource
+# - Child Cluster: ArgoCD syncs and executes generated resources
+---
+apiVersion: platform.kubecore.io/v1alpha1
+kind: QualityGate
+metadata:
+  name: health-check-gate
+  namespace: test
+  labels:
+    platform.kubecore.io/type: health-check
+    platform.kubecore.io/implementation: argo
+spec:
+  # Identity and Metadata
+  key: health-check-gate
+  description: "Health check for the application"
+  category: deployment
+  severity: high
+
+  # Environment Applicability
+  applicability:
+    environments:
+      - name: dev
+        phase: active    # Run before promotion in dev
+        required: true    # Optional in dev for faster iteration
+      - name: staging
+        phase: active
+        required: true
+      - name: prod
+        phase: active      # Required for production health
+        required: true
+
+  # Engine Configuration - use workflow engine
+  engine:
+    type: argo
+
+  argo:
+    kind: ArgoCDCommitStatus
+
+    
+---
+apiVersion: platform.kubecore.io/v1alpha1
+kind: QualityGate
+metadata:
+  name: enhanced-security-scan-gate
+  namespace: test
+  labels:
+    platform.kubecore.io/type: security
+    platform.kubecore.io/implementation: embedded-workflow
+spec:
+  # Identity and Metadata
+  key: enhanced-security-scan
+  description: "Comprehensive security scanning with SAST and dependency audit using embedded workflow"
+  category: security
+  severity: high
+
+  # Environment Applicability
+  applicability:
+    environments:
+      - name: dev
+        phase: proposed    # Run before promotion in dev
+        required: false    # Optional in dev for faster iteration
+      - name: staging
+        phase: proposed
+        required: true
+      - name: prod
+        phase: active      # Required for production health
+        required: true
+
+  # Engine Configuration - use workflow engine
+  engine:
+    type: workflow
+
+  # Workflow Specification (when engine.type = "workflow")
+  workflowSpec:
+    # Event Triggers Configuration
+    triggers:
+      provider: github
+      events: [deployment, pull_request]
+      filters:
+        - path: body.action
+          type: string
+          values: [created, synchronize, opened]
+      payloadToParameters:
+        - from: body.deployment.sha
+          to: commit-sha
+        - from: body.repository.full_name
+          to: repo-name
+        - from: body.pull_request.number
+          to: pr-number
+        - from: body.repository.clone_url
+          to: repo-url
+
+    # Embedded Workflow Schema
+    workflowSchema:
+      # Template Metadata
+      serviceAccountName: quality-gate-runner
+      
+      # Workflow Parameters (Declarative)
+      parameters:
+        - name: commit-sha
+          description: "Git commit SHA to validate"
+          required: true
+          type: string
+        - name: repo-name
+          description: "Repository full name (owner/repo)"
+          required: true
+          type: string
+        - name: repo-url
+          description: "Repository clone URL"
+          required: true
+          type: string
+        - name: pr-number
+          description: "Pull request number"
+          required: false
+          type: string
+          default: ""
+        - name: environment
+          description: "Target environment"
+          required: true
+          type: string
+        - name: app-name
+          description: "Application name"
+          required: true
+          type: string
+
+      # Workflow Steps Definition
+      steps:
+        - name: checkout-code
+          container:
+            image: alpine/git:latest
+            command: ["git"]
+            args:
+              - "clone"
+              - "{{workflow.parameters.repo-url}}"
+              - "/workspace"
+              - "--depth=1"
+              - "--single-branch"
+            env:
+              - name: GIT_COMMIT_SHA
+                value: "{{workflow.parameters.commit-sha}}"
+            resources:
+              requests:
+                memory: "128Mi"
+                cpu: "100m"
+              limits:
+                memory: "256Mi"
+                cpu: "200m"
+            volumeMounts:
+              - name: workspace
+                mountPath: /workspace
+          outputs:
+            artifacts:
+              - name: source-code
+                path: /workspace
+
+        - name: sast-scan
+          dependencies: [checkout-code]
+          container:
+            image: securecodewarrior/semgrep:latest
+            command: ["semgrep"]
+            args:
+              - "--config=auto"
+              - "--json"
+              - "--output=/tmp/sast-results.json"
+              - "/workspace"
+            resources:
+              requests:
+                memory: "256Mi"
+                cpu: "250m"
+              limits:
+                memory: "512Mi"
+                cpu: "500m"
+            volumeMounts:
+              - name: workspace
+                mountPath: /workspace
+          outputs:
+            parameters:
+              - name: sast-result
+                valueFrom:
+                  path: /tmp/sast-results.json
+            artifacts:
+              - name: sast-report
+                path: /tmp/sast-results.json
+
+        - name: dependency-scan
+          dependencies: [checkout-code]
+          container:
+            image: aquasec/trivy:latest
+            command: ["trivy"]
+            args:
+              - "fs"
+              - "--format=json"
+              - "--output=/tmp/deps-results.json"
+              - "/workspace"
+            resources:
+              requests:
+                memory: "256Mi"
+                cpu: "250m"
+              limits:
+                memory: "512Mi"
+                cpu: "500m"
+            volumeMounts:
+              - name: workspace
+                mountPath: /workspace
+          outputs:
+            parameters:
+              - name: deps-result
+                valueFrom:
+                  path: /tmp/deps-results.json
+            artifacts:
+              - name: deps-report
+                path: /tmp/deps-results.json
+
+        - name: aggregate-results
+          dependencies: [sast-scan, dependency-scan]
+          container:
+            image: security-aggregator:latest
+            command: ["aggregate"]
+            args:
+              - "--sast={{steps.sast-scan.outputs.parameters.sast-result}}"
+              - "--deps={{steps.dependency-scan.outputs.parameters.deps-result}}"
+              - "--output=/tmp/final-result.json"
+              - "--threshold=HIGH"
+            resources:
+              requests:
+                memory: "128Mi"
+                cpu: "100m"
+              limits:
+                memory: "256Mi"
+                cpu: "200m"
+          outputs:
+            parameters:
+              - name: final-result
+                valueFrom:
+                  path: /tmp/final-result.json
+
+        - name: publish-commit-status
+          dependencies: [aggregate-results]
+          container:
+            image: commit-status-publisher:latest
+            command: ["publish"]
+            args:
+              - "--sha={{workflow.parameters.commit-sha}}"
+              - "--repo={{workflow.parameters.repo-name}}"
+              - "--key=enhanced-security-scan"
+              - "--result={{steps.aggregate-results.outputs.parameters.final-result}}"
+              - "--description=Enhanced security scan: {{workflow.parameters.environment}}"
+              - "--url=https://argo.kubecore.eu/workflows/{{workflow.namespace}}/{{workflow.name}}"
+            env:
+              - name: GITHUB_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: github-credentials
+                    key: token
+            resources:
+              requests:
+                memory: "64Mi"
+                cpu: "50m"
+              limits:
+                memory: "128Mi"
+                cpu: "100m"
+
+      # Volumes
+      volumes:
+        - name: workspace
+          emptyDir: {}
+
+      # Execution Configuration
+      timeout: "15m"
+      retry:
+        limit: 2
+        policy: OnFailure
+        backoff:
+          duration: "1m"
+          factor: 2
+          maxDuration: "10m"
+
+      # Workflow Outputs
+      outputs:
+        parameters:
+          - name: quality-gate-result
+            description: "Overall security scan result"
+            valueFrom:
+              parameter: "{{steps.aggregate-results.outputs.parameters.final-result}}"
+
+    # CommitStatus Configuration
+    commitStatus:
+      descriptionTemplate: "Enhanced security scan {{.environment}}: {{.summary}}"
+      urlTemplate: "https://argo.{{.cluster-domain}}/workflows/{{.namespace}}/{{.workflow-name}}"
+      resultMapping:
+        outputParameter: quality-gate-result
+        successValues: ["clean", "passed", "low-risk"]
+        failureValues: ["vulnerable", "failed", "high-risk", "critical-risk"]
+
+    # Resource Requirements
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "1Gi"
+      limits:
+        cpu: "2000m"
+        memory: "2Gi"
+---
+
+# Enhanced Smoke Test QualityGate - Embedded Workflow Schema Example
+# ================================================================
+# This example demonstrates a simpler embedded workflow for smoke testing
+# applications after deployment using the new schema approach.
+#
+# FEATURES:
+# - Single-step smoke test execution
+# - GitHub deployment event triggers
+# - Simple pass/fail result reporting
+# - Lightweight resource requirements
+---
+apiVersion: platform.kubecore.io/v1alpha1
+kind: QualityGate
+metadata:
+  name: enhanced-smoke-test-gate
+  namespace: test
+  labels:
+    platform.kubecore.io/type: testing
+    platform.kubecore.io/implementation: embedded-workflow
+spec:
+  # Identity and Metadata
+  key: enhanced-smoke-test
+  description: "Smoke test endpoints after deployment using embedded workflow"
+  category: testing
+  severity: medium
+
+  # Environment Applicability
+  applicability:
+    environments:
+      - name: dev
+        phase: active      # Run after deployment in dev
+        required: true
+      - name: staging
+        phase: active
+        required: true
+      - name: prod
+        phase: active
+        required: true
+
+  # Engine Configuration - use workflow engine
+  engine:
+    type: workflow
+
+  # Workflow Specification (when engine.type = "workflow")
+  workflowSpec:
+    # Event Triggers Configuration
+    triggers:
+      provider: github
+      events: [deployment]
+      filters:
+        - path: body.deployment.environment
+          type: string
+          values: [development, staging, production]
+        - path: body.deployment_status.state
+          type: string
+          values: [success]
+      payloadToParameters:
+        - from: body.deployment.sha
+          to: commit-sha
+        - from: body.repository.full_name
+          to: repo-name
+        - from: body.deployment.environment
+          to: environment
+        - from: body.deployment.payload.web_url
+          to: app-url
+
+    # Embedded Workflow Schema
+    workflowSchema:
+      # Template Metadata
+      serviceAccountName: quality-gate-runner
+      
+      # Workflow Parameters (Declarative)
+      parameters:
+        - name: commit-sha
+          description: "Git commit SHA that was deployed"
+          required: true
+          type: string
+        - name: repo-name
+          description: "Repository full name (owner/repo)"
+          required: true
+          type: string
+        - name: environment
+          description: "Deployment environment"
+          required: true
+          type: string
+        - name: app-url
+          description: "Application URL to test"
+          required: true
+          type: string
+        - name: app-name
+          description: "Application name"
+          required: true
+          type: string
+        - name: timeout
+          description: "Test timeout duration"
+          required: false
+          type: string
+          default: "5m"
+
+      # Workflow Steps Definition
+      steps:
+        - name: smoke-test
+          container:
+            image: curlimages/curl:latest
+            command: ["sh", "-c"]
+            args:
+              - |
+                set -e
+                echo "Starting smoke test for {{workflow.parameters.app-name}} in {{workflow.parameters.environment}}"
+                echo "Testing URL: {{workflow.parameters.app-url}}"
+                
+                # Health check endpoint
+                echo "Testing health endpoint..."
+                curl -f -s --max-time 30 "{{workflow.parameters.app-url}}/health" || {
+                  echo "Health check failed"
+                  echo "failed" > /tmp/result.txt
+                  exit 1
+                }
+                
+                # API status endpoint
+                echo "Testing API status endpoint..."
+                curl -f -s --max-time 30 "{{workflow.parameters.app-url}}/api/v1/status" || {
+                  echo "API status check failed"
+                  echo "failed" > /tmp/result.txt
+                  exit 1
+                }
+                
+                # Basic functionality test
+                echo "Testing basic functionality..."
+                response=$(curl -f -s --max-time 30 "{{workflow.parameters.app-url}}/api/v1/ping")
+                if [ "$response" != "pong" ]; then
+                  echo "Basic functionality test failed"
+                  echo "failed" > /tmp/result.txt
+                  exit 1
+                fi
+                
+                echo "All smoke tests passed!"
+                echo "passed" > /tmp/result.txt
+            resources:
+              requests:
+                memory: "64Mi"
+                cpu: "50m"
+              limits:
+                memory: "128Mi"
+                cpu: "100m"
+          outputs:
+            parameters:
+              - name: test-result
+                valueFrom:
+                  path: /tmp/result.txt
+
+        - name: publish-status
+          dependencies: [smoke-test]
+          container:
+            image: commit-status-publisher:latest
+            command: ["publish"]
+            args:
+              - "--sha={{workflow.parameters.commit-sha}}"
+              - "--repo={{workflow.parameters.repo-name}}"
+              - "--key=enhanced-smoke-test"
+              - "--result={{steps.smoke-test.outputs.parameters.test-result}}"
+              - "--description=Smoke test {{workflow.parameters.environment}}: {{steps.smoke-test.outputs.parameters.test-result}}"
+              - "--url=https://argo.kubecore.eu/workflows/{{workflow.namespace}}/{{workflow.name}}"
+            env:
+              - name: GITHUB_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: github-credentials
+                    key: token
+            resources:
+              requests:
+                memory: "64Mi"
+                cpu: "50m"
+              limits:
+                memory: "128Mi"
+                cpu: "100m"
+
+      # Execution Configuration
+      timeout: "10m"
+      retry:
+        limit: 3
+        policy: OnFailure
+        backoff:
+          duration: "30s"
+          factor: 2
+          maxDuration: "5m"
+
+      # Workflow Outputs
+      outputs:
+        parameters:
+          - name: quality-gate-result
+            description: "Smoke test result"
+            valueFrom:
+              parameter: "{{steps.smoke-test.outputs.parameters.test-result}}"
+
+    # CommitStatus Configuration
+    commitStatus:
+      descriptionTemplate: "Smoke test {{.environment}}: {{.summary}}"
+      urlTemplate: "https://argo.{{.cluster-domain}}/workflows/{{.namespace}}/{{.workflow-name}}"
+      resultMapping:
+        outputParameter: quality-gate-result
+        successValues: ["passed", "success"]
+        failureValues: ["failed", "error", "timeout"]
+
+    # Resource Requirements
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+      limits:
+        cpu: "200m"
+        memory: "256Mi"

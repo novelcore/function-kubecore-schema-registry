@@ -1,6 +1,14 @@
-# Replace this with your XR!
-apiVersion: example.crossplane.io/v1
-kind: XR
+# Example XSchemaRegistry resource for testing
+apiVersion: platform.kubecore.io/v1alpha1
+kind: XSchemaRegistry
 metadata:
-  name: example-xr
-spec: {}
+  name: test-schema-registry-abc123
+  labels:
+    crossplane.io/claim-name: test-schema-registry
+    crossplane.io/claim-namespace: default
+spec:
+  githubProjectRef:
+    name: test-project
+    namespace: default
+  enableTransitiveDiscovery: true
+  traversalDepth: 3

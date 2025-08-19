@@ -4,14 +4,16 @@ metadata:
   name: function-kubecore-schema-registry
 spec:
   compositeTypeRef:
-    apiVersion: example.crossplane.io/v1
-    kind: XR
+    apiVersion: platform.kubecore.io/v1alpha1
+    kind: XSchemaRegistry
   mode: Pipeline
   pipeline:
-  - step: run-the-template
+  - step: schema-registry-discovery
     functionRef:
       name: function-kubecore-schema-registry
     input:
       apiVersion: template.fn.crossplane.io/v1beta1
       kind: Input
-      example: "Hello world"
+      enableTransitiveDiscovery: true
+      traversalDepth: 3
+      includeFullSchema: true

@@ -1,0 +1,178 @@
+apiVersion: platform.kubecore.io/v1alpha1
+kind: KubeNet
+metadata:
+  name: demo-network
+  namespace: test
+spec:
+  cloudProvider: aws
+  region: eu-west-3
+
+  # VPC Configuration
+  vpc:
+    cidr: "10.0.0.0/16"
+    enableDnsHostnames: true
+    enableDnsSupport: true
+
+    # Availability Zones (will default to eu-west-3a, eu-west-3b, eu-west-3c if not specified)
+    availabilityZones:
+    - eu-west-3a
+    - eu-west-3b
+    - eu-west-3c
+    # Subnet Configuration (optional - will auto-calculate if not provided)
+    subnets:
+      public:
+      - "10.0.0.0/24" # eu-west-3a public
+      - "10.0.2.0/24" # eu-west-3b public  
+      - "10.0.4.0/24" # eu-west-3c public
+      private:
+      - "10.0.1.0/24" # eu-west-3a private
+      - "10.0.3.0/24" # eu-west-3b private
+      - "10.0.5.0/24" # eu-west-3c private
+
+  # DNS configuration
+  dns:
+    domain: dummy.kubecore.eu
+
+    # AWS Route 53 specific configuration
+    route53:
+      region: eu-west-3
+
+      hostedZone:
+        name: dummy.kubecore.eu
+        comment: "System domain managed by KubeCore KubeNet"
+        forceDestroy: true # Allow deletion for example purposes
+      # Note: DNS records are now managed automatically by ExternalDNS
+      # deployed in KubeSystem. No manual records configuration needed.
+      # Environment configuration (inherits from platform-defaults)
+  environment:
+    parentEnvironment: platform-defaults
+
+  # Provider Configuration
+  providerConfigRef:
+    aws: aws-default
+---
+apiVersion: platform.kubecore.io/v1alpha1
+kind: KubeCluster
+metadata:
+  name: demo-cluster
+  namespace: test
+spec:
+  # Reference to KubeNet for network integration
+  kubeNetRef:
+    name: demo-network # Name of the KubeNet claim
+
+  # Reference to the GitHubProject used for GitOps
+  githubProjectRef:
+    name: demo-project
+
+  cloudProvider: aws
+
+  # Cluster Configuration
+  cluster:
+    version: "1.33"
+    region: eu-west-3
+
+    # Access Configuration
+    accessConfig:
+      authenticationMode: API_AND_CONFIG_MAP
+      bootstrapClusterCreatorAdminPermissions: true
+
+    # Endpoint Configuration
+    endpointConfig:
+      privateAccess: true
+      publicAccess: true
+      publicAccessCidrs:
+      - "0.0.0.0/0"
+
+    # Logging Configuration
+    logging:
+      enabled: true
+      types:
+      - "api"
+      - "audit"
+      - "authenticator"
+
+    # System Nodes Configuration (optional - will use defaults if not specified)
+    # Only kubecoresys node group exists - hosts ALL system workloads (AWS EKS add-ons + platform components)
+    systemNodes:
+      kubecoresys:
+        instanceTypes: [ "m5.xlarge" ] # Default, can be customized
+        diskSize: 60 # Default, can be customized
+        scalingConfig:
+          minSize: 2
+          maxSize: 10
+          desiredSize: 2
+
+  # Node Groups Configuration (OPTIONAL)
+  # If nodeGroups is not specified or empty, NO user node groups will be created
+  # Only the kubecoresys system node group will exist for system workloads
+  #
+  # In AWS, On-Demand Instances offer a flexible and pay-as-you-go approach to compute capacity, 
+  # allowing you to pay only for the resources you use without long-term commitments. 
+  # This contrasts with Reserved Instances, which offer discounts for upfront or partial upfront payment for a fixed term, and Spot Instances, 
+  # which provide significant discounts for unused capacity but with the risk of interruption. 
+  # nodeGroups:
+  # - name: "general"
+  #   instanceTypes:
+  #   - "t3.medium"
+  #   scalingConfig:
+  #     minSize: 1
+  #     maxSize: 5
+  #     desiredSize: 2
+  #   diskSize: 20
+  #   capacityType: "ON_DEMAND"
+  #   labels:
+  #     nodegroup-type: "general"
+  #     environment: "dev"
+  # In AWS, capacity_type = "SPOT" refers to the use of Spot Instances for compute capacity. 
+  # Spot Instances are unused EC2 capacity offered at a discount, potentially up to 90% less than On-Demand prices, 
+  # but with the risk of interruption if AWS needs the capacity. This approach is suitable for fault-tolerant and flexible workloads where interruptions are acceptable. 
+  # - name: "spot"
+  #   instanceTypes:
+  #   - "t3.medium"
+  #   - "t3.large"
+  #   scalingConfig:
+  #     minSize: 0
+  #     maxSize: 10
+  #     desiredSize: 1
+  #   diskSize: 20
+  #   capacityType: "SPOT"
+  #   labels:
+  #     nodegroup-type: "spot"
+  #     environment: "dev"
+  #   taints:
+  #   - key: "spot-instance"
+  #     value: "true"
+  #     effect: "NoSchedule"
+
+  # Add-ons Configuration
+  # All AWS EKS add-ons are automatically configured to schedule ONLY on kubecoresys nodes
+  addOns:
+    vpcCni:
+      enabled: true
+      # version: "v1.18.1-eksbuild.1"  # Optional - omit to use latest compatible version
+    coreDns:
+      enabled: true
+      # version: "v1.11.1-eksbuild.4"  # Optional - omit to use latest compatible version
+    kubeProxy:
+      enabled: true
+      # version: "v1.29.3-eksbuild.2"  # Optional - omit to use latest compatible version
+    ebsCsiDriver:
+      enabled: true
+      # version: "v1.30.0-eksbuild.1"  # Optional - omit to use latest compatible version
+
+      # Security Configuration
+  security:
+    encryptionConfig:
+      enabled: false # Set to true and provide KMS key for encryption at rest
+      # kmsKeyId: "arn:aws:kms:eu-west-3:123456789012:key/12345678-1234-1234-1234-123456789012"
+    serviceAccountRole:
+      create: true
+
+  # Provider Configuration References
+  providerConfigRef:
+    aws: aws-default
+  # # Connection Secret Reference (at root level)
+  # writeConnectionSecretToRef:
+  #   name: demo-cluster-kubeconfig
+  #   namespace: test

@@ -1,0 +1,307 @@
+# KubEnv Environment - Development (dev)
+apiVersion: platform.kubecore.io/v1alpha1
+kind: KubEnv
+metadata:
+  name: demo-dev
+  namespace: test
+spec:
+  environmentType: dev
+  kubeClusterRef:
+    name: demo-cluster
+    namespace: test
+
+  # Quality Gates for development environment
+  qualityGates:
+  - ref:
+      name: enhanced-smoke-test-gate
+      namespace: test
+    # TODO: add evaluation strategy against the applicability, located in the QualityGate schema
+    phase: proposed # Required for environment health
+    required: true
+    parameters:
+      timeout: "5m"
+      environment: "development"
+
+  # - ref:
+  #     name: enhanced-security-scan-gate
+  #     namespace: test
+  #   phase: proposed # Run before promotion
+  #   required: false # Optional in dev for faster iteration
+  #   parameters:
+  #     severity-threshold: "MEDIUM" # More lenient in dev
+  # Resource configuration for development
+  resources:
+    profile: small
+    defaults:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+      limits:
+        cpu: "500m"
+        memory: "256Mi"
+    scaling:
+      minReplicas: 1
+      maxReplicas: 5
+      targetCPUUtilization: 80
+
+  # Development-specific environment variables
+  environmentConfig:
+    variables:
+      ENVIRONMENT: development
+      LOG_LEVEL: debug
+      DEBUG_MODE: "true"
+      CACHE_TTL: "300"
+      MONITORING_ENABLED: "true"
+
+  # SDLC configuration for development
+  sdlc:
+    promotionPolicy:
+      automatic: true # Auto-promote in dev
+      requiresApproval: false
+
+  # Development networking configuration
+  networking:
+    ingress:
+      enabled: true
+      className: traefik-system
+      tls: true
+      annotations:
+        cert-manager.io/cluster-issuer: "letsencrypt-staging"
+
+  # Relaxed security for development
+  security:
+    podSecurityStandard: baseline
+    networkPolicies: false
+
+  # Development observability
+  observability:
+    metrics:
+      enabled: true
+      path: "/metrics"
+      port: 9090
+    logging:
+      level: debug
+      format: json
+    tracing:
+      enabled: true
+      samplingRate: 1.0 # 100% sampling in dev
+---
+
+
+# # KubEnv Environment - Development (dev)
+# apiVersion: platform.kubecore.io/v1alpha1
+# kind: KubEnv
+# metadata:
+#   name: demo-dev-v2
+#   namespace: test
+# spec:
+#   environmentType: dev
+#   kubeClusterRef:
+#     name: demo-cluster
+#     namespace: test
+
+#   # Quality Gates for development environment
+#   qualityGates:
+#   - ref:
+#       name: smoke-test-gate
+#       namespace: test
+#     phase: active  # Required for environment health
+#     required: true
+#     parameters:
+#       timeout: "5m"
+#       environment: "development"
+
+#   - ref:
+#       name: security-scan-gate
+#       namespace: test
+#     phase: proposed  # Run before promotion
+#     required: false  # Optional in dev for faster iteration
+#     parameters:
+#       severity-threshold: "MEDIUM"  # More lenient in dev
+
+#   # Resource configuration for development
+#   resources:
+#     profile: small
+#     defaults:
+#       requests:
+#         cpu: "100m"
+#         memory: "128Mi"
+#       limits:
+#         cpu: "500m"
+#         memory: "256Mi"
+#     scaling:
+#       minReplicas: 1
+#       maxReplicas: 5
+#       targetCPUUtilization: 80
+
+#   # Development-specific environment variables
+#   environmentConfig:
+#     variables:
+#       ENVIRONMENT: development
+#       LOG_LEVEL: debug
+#       DEBUG_MODE: "true"
+#       CACHE_TTL: "300"
+#       MONITORING_ENABLED: "true"
+
+#   # SDLC configuration for development
+#   sdlc:
+#     promotionPolicy:
+#       automatic: true  # Auto-promote in dev
+#       requiresApproval: false
+
+#   # Development networking configuration
+#   networking:
+#     ingress:
+#       enabled: true
+#       className: traefik-system
+#       tls: true
+#       annotations:
+#         cert-manager.io/cluster-issuer: "letsencrypt-staging"
+
+#   # Relaxed security for development
+#   security:
+#     podSecurityStandard: baseline
+#     networkPolicies: false
+
+#   # Development observability
+#   observability:
+#     metrics:
+#       enabled: true
+#       path: "/metrics"
+#       port: 9090
+#     logging:
+#       level: debug
+#       format: json
+#     tracing:
+#       enabled: true
+#       samplingRate: 1.0  # 100% sampling in dev
+---
+
+# # KubEnv Environment - Production (prod)
+# apiVersion: platform.kubecore.io/v1alpha1
+# kind: KubEnv
+# metadata:
+#   name: demo-prod
+#   namespace: test
+# spec:
+#   environmentType: prod
+#   kubeClusterRef:
+#     name: demo-cluster
+#     namespace: test
+
+#   # Comprehensive Quality Gates for production
+#   qualityGates:
+#   # Required gates for environment health (active phase)
+#   - ref:
+#       name: smoke-test-gate
+#       namespace: test
+#     phase: active
+#     required: true
+#     parameters:
+#       timeout: "10m"  # Longer timeout for prod
+#       environment: "production"
+
+#   - ref:
+#       name: security-scan-gate
+#       namespace: test
+#     phase: active
+#     required: true
+#     parameters:
+#       severity-threshold: "HIGH"  # Strict security in prod
+
+#   # Production-grade resource configuration
+#   resources:
+#     profile: medium
+#     defaults:
+#       requests:
+#         cpu: "200m"
+#         memory: "256Mi"
+#       limits:
+#         cpu: "1000m"
+#         memory: "512Mi"
+#     scaling:
+#       minReplicas: 3
+#       maxReplicas: 20
+#       targetCPUUtilization: 70
+
+#   # Production environment variables
+#   environmentConfig:
+#     variables:
+#       ENVIRONMENT: production
+#       LOG_LEVEL: info
+#       DEBUG_MODE: "false"
+#       CACHE_TTL: "3600"
+#       MONITORING_ENABLED: "true"
+#       TRACING_ENABLED: "true"
+#       RATE_LIMIT_ENABLED: "true"
+
+#   # Strict SDLC configuration for production
+#   sdlc:
+#     promotionPolicy:
+#       automatic: false
+#       requiresApproval: true
+#       approvers:
+#       - "platform-team-lead"
+#       - "security-team-lead"
+#       conditions:
+#       - "all-tests-pass"
+#       - "security-approved"
+
+#   # Production deployment strategy
+#   deploymentStrategy:
+#     type: canary
+#     canary:
+#       steps:
+#       - weight: 10
+#         duration: "10m"
+#         analysis:
+#           successCondition: "result[0] >= 0.95"
+#       - weight: 25
+#         duration: "15m"
+#       - weight: 50
+#         duration: "20m"
+#       - weight: 100
+#         duration: "0s"
+
+#   # Production networking with enhanced security
+#   networking:
+#     ingress:
+#       enabled: true
+#       className: traefik-system
+#       tls: true
+#       annotations:
+#         cert-manager.io/cluster-issuer: "letsencrypt-prod"
+#         traefik.ingress.kubernetes.io/router.middlewares: "security-headers@kubernetescrd,rate-limit@kubernetescrd"
+
+#   # Strict security for production
+#   security:
+#     podSecurityStandard: restricted
+#     networkPolicies: true
+#     serviceAccount:
+#       create: true
+#       annotations:
+#         eks.amazonaws.com/role-arn: "arn:aws:iam::123456789012:role/prod-app-role"
+
+#   # Production observability
+#   observability:
+#     metrics:
+#       enabled: true
+#       path: "/metrics"
+#       port: 9090
+#     logging:
+#       level: info
+#       format: json
+#     tracing:
+#       enabled: true
+#       samplingRate: 0.1  # 10% sampling in prod
+
+#   # Production policies
+#   policies:
+#     dataRetention:
+#       logs: "90d"
+#       metrics: "365d"
+#       traces: "30d"
+#     backup:
+#       enabled: true
+#       schedule: "0 2 * * *"
+#       retention: "90d"

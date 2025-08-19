@@ -9,3 +9,13 @@ metadata:
 spec:
   # This is ignored when using the Development runtime.
   package: function-kubecore-schema-registry
+---
+# Function input configuration
+apiVersion: template.fn.crossplane.io/v1beta1
+kind: Input
+metadata:
+  name: schema-registry-config
+spec:
+  enableTransitiveDiscovery: true
+  traversalDepth: 3
+  includeFullSchema: true

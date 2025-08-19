@@ -1,0 +1,13 @@
+---
+# Claim
+apiVersion: platform.kubecore.io/v1alpha1
+kind: XSchemaRegistry
+metadata:
+  name: schema-registry-phase1
+  namespace: test
+spec:
+  githubProjectRef:
+    name: demo-project
+    namespace: test
+  enableTransitiveDiscovery: true
+  traversalDepth: 3

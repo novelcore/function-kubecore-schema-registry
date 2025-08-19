@@ -1,0 +1,353 @@
+# Enhanced XApp-KubEnv Integration Example
+# ========================================
+# This example demonstrates the enhanced XApp composition with dynamic KubEnv integration.
+#
+# KEY INTEGRATION FEATURES:
+# 1. Dynamic Configuration Loading: XApp loads KubEnv resources as extra-resources
+# 2. Environment-Specific Manifests: Generates separate manifests per environment
+# 3. Configuration Inheritance & Overrides: Merges KubEnv defaults with XApp overrides
+# 4. Quality Gate Integration: Inherits and customizes quality gates from KubEnv
+# 5. Automatic Resource Generation: Creates Deployment, Service, Ingress per environment
+#
+# WHAT HAPPENS WITH THE NEW COMPOSITION:
+# - XApp composition loads demo-dev and demo-prod KubEnv resources
+# - For each enabled environment, generates GitOps manifests in separate branches
+# - Manifests include merged configuration (KubEnv + XApp overrides)
+# - Resources are deployed to KubEnv-specific namespaces with proper labels
+# - Ingress configuration uses KubEnv networking settings
+#
+# EXPECTED OUTPUTS:
+# - art-api-dev manifests in kubeapps/art-api/dev/resources.yaml
+# - art-api-prod manifests in kubeapps/art-api/prod/resources.yaml (when enabled)
+# - Each manifest targets its KubEnv namespace (demo-dev/demo-prod)
+# - Resource requests/limits dynamically calculated from KubEnv + overrides
+---
+apiVersion: github.platform.kubecore.io/v1alpha1
+kind: GitHubApp
+metadata:
+  name: art-api
+spec:
+  appName: art-api
+  description: "REST Python API for sharing technological ideas and art related ideas"
+  visibility: private
+  # GitHub Project Reference - inherits provider configuration automatically
+  githubProjectRef:
+    name: demo-project
+    namespace: test # Updated to match the GitHubProject namespace
+
+  repositorySource:
+    type: template
+    template:
+      owner: novelcore
+      repository: kubeapp-python-rest
+      includeAllBranches: false
+
+  # Note: secretRef removed - provider config now inherited from GitHubProject
+
+  branchStrategy:
+    enabled: true
+    type: gitflow
+
+  webhooks:
+    enabled: false
+  environment:
+    parentEnvironment: platform-defaults
+---
+# Enhanced Multi-Environment Example with Quality Gate Integration
+apiVersion: app.kubecore.io/v1alpha1
+kind: App
+metadata:
+  name: art-api
+  namespace: default
+  labels:
+    app.kubernetes.io/name: art-api
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: demo-project
+spec:
+  # Core Application Configuration
+  type: rest
+  port: 8000
+  image: "ghcr.io/novelcore/art-api:latest" # Add container image
+
+  # GitHub App Reference for GitOps integration
+  githubAppRef:
+    name: art-api
+    namespace: default
+
+  # Environment Configurations - Enhanced with Quality Gate Integration
+  environments:
+
+  # Development Environment with Quality Gate Overrides
+  - kubenvRef:
+      name: demo-dev
+      namespace: test
+    enabled: true
+    overrides:
+      replicas: 1
+
+      # Development-specific environment variables
+      # These will be merged with KubEnv's environmentConfig.variables
+      environment:
+        NODE_ENV: development
+        API_VERSION: v1
+        APP_NAME: art-api
+        DATABASE_URL: "postgresql://demo-dev-db:5432/artapi_dev"
+        REDIS_URL: "redis://demo-dev-redis:6379"
+        PYTHON_ENV: development
+        FLASK_DEBUG: "1"
+        # LOG_LEVEL and other base vars inherited from demo-dev KubEnv
+
+        # Override resource requests for this specific app
+        # These values will override the defaults from demo-dev KubEnv
+      resources:
+        requests:
+          memory: "128Mi" # Python app needs more memory
+          cpu: "100m" # Standard CPU for development
+        limits:
+          memory: "512Mi" # Higher memory limit for Python
+          cpu: "500m" # Keep standard CPU limit
+
+      # ENHANCE Quality Gates: Add application-specific requirements
+      # qualityGates:
+      # # Override smoke test parameters for this app
+      # - ref:
+      #     name: smoke-test-gate
+      #     namespace: test
+      #   phase: active
+      #   required: true
+      #   parameters:
+      #     timeout: "3m" # Shorter timeout for dev
+      #     environment: "development"
+      #     appName: "art-api"
+      #     endpoints: "/health,/api/v1/status,/api/v1/art" # App-specific endpoints
+
+      # # Make security scan required for this app (was optional in KubEnv)
+      # - ref:
+      #     name: security-scan-gate
+      #     namespace: test
+      #   phase: proposed
+      #   required: true # Override: make required for this app
+      #   parameters:
+      #     severity-threshold: "MEDIUM"
+      #     appName: "art-api"
+      #     scanTargets: "image,manifests"
+  # Development Environment with Quality Gate Overrides
+  # - kubenvRef:
+  #     name: demo-dev-v2
+  #     namespace: test
+  #   enabled: true
+  #   overrides:
+  #     replicas: 1
+
+  #     # Development-specific environment variables
+  #     # These will be merged with KubEnv's environmentConfig.variables
+  #     environment:
+  #       NODE_ENV: development
+  #       API_VERSION: v1
+  #       APP_NAME: art-api
+  #       DATABASE_URL: "postgresql://demo-dev-db:5432/artapi_dev"
+  #       REDIS_URL: "redis://demo-dev-redis:6379"
+  #       PYTHON_ENV: development
+  #       FLASK_DEBUG: "1"
+  #       # LOG_LEVEL and other base vars inherited from demo-dev KubEnv
+
+  #     # Override resource requests for this specific app
+  #     # These values will override the defaults from demo-dev KubEnv
+  #     resources:
+  #       requests:
+  #         memory: "128Mi"  # Python app needs more memory
+  #         cpu: "100m"     # Standard CPU for development
+  #       limits:
+  #         memory: "512Mi"  # Higher memory limit for Python
+  #         cpu: "500m"     # Keep standard CPU limit
+
+  #     # ENHANCE Quality Gates: Add application-specific requirements
+  #     qualityGates:
+  #     # Override smoke test parameters for this app
+  #     - ref:
+  #         name: smoke-test-gate
+  #         namespace: test
+  #       phase: active
+  #       required: true
+  #       parameters:
+  #         timeout: "3m"  # Shorter timeout for dev
+  #         environment: "development"
+  #         appName: "art-api"
+  #         endpoints: "/health,/api/v1/status,/api/v1/art"  # App-specific endpoints
+
+  #     # Make security scan required for this app (was optional in KubEnv)
+  #     - ref:
+  #         name: security-scan-gate
+  #         namespace: test
+  #       phase: proposed
+  #       required: true  # Override: make required for this app
+  #       parameters:
+  #         severity-threshold: "MEDIUM"
+  #         appName: "art-api"
+  #         scanTargets: "image,manifests"
+
+  # Production Environment with Comprehensive Quality Gates
+  # - kubenvRef:
+  #     name: demo-prod
+  #     namespace: test
+  #   enabled: false  # Disable for initial testing
+  #   overrides:
+  #     replicas: 3  # Production scaling
+
+  #     # Production-specific environment variables
+  #     environment:
+  #       NODE_ENV: production
+  #       API_VERSION: v1
+  #       APP_NAME: art-api
+  #       DATABASE_URL: "postgresql://demo-prod-db:5432/artapi_prod"
+  #       REDIS_URL: "redis://demo-prod-redis:6379"
+  #       PYTHON_ENV: production
+  #       FLASK_DEBUG: "0"
+  #       FEATURE_FLAGS: "new-ui=true,analytics=true"
+  #       RATE_LIMIT_REQUESTS: "1000"
+  #       RATE_LIMIT_WINDOW: "60s"
+  #       # Other vars inherited from demo-prod KubEnv
+
+  #     # Production resource requirements
+  #     resources:
+  #       requests:
+  #         memory: "512Mi"  # Much higher for production
+  #         cpu: "300m"
+  #       limits:
+  #         memory: "1Gi"
+  #         cpu: "1500m"
+
+  #     # ENHANCE Quality Gates for production
+  #     qualityGates:
+  #     # Enhanced smoke test for production
+  #     - ref:
+  #         name: smoke-test-gate
+  #         namespace: test
+  #       phase: active
+  #       required: true
+  #       parameters:
+  #         timeout: "15m"  # Longer timeout for comprehensive testing
+  #         environment: "production"
+  #         appName: "art-api"
+  #         endpoints: "/health,/api/v1/status,/api/v1/art,/api/v1/art/search"
+  #         loadTestUsers: "50"  # Production load testing
+  #         successThreshold: "99%"  # High success rate requirement
+
+  #     # Strict security scanning for production
+  #     - ref:
+  #         name: security-scan-gate
+  #         namespace: test
+  #       phase: active
+  #       required: true
+  #       parameters:
+  #         severity-threshold: "HIGH"  # Strict security in prod
+  #         appName: "art-api"
+  #         scanTargets: "image,manifests,dependencies"
+  #         complianceChecks: "PCI-DSS,SOC2"  # Production compliance
+
+  # Note: Provider configuration automatically inherited from GitHubApp -> GitHubProject chain
+
+
+---
+
+
+# Enhanced Integration Example - Configuration Inheritance and Merging
+#
+# This example demonstrates the enhanced XApp and KubEnv integration with:
+# 1. Dynamic environment configuration inheritance
+# 2. Quality gate merging and customization
+# 3. Multi-environment deployment (dev + prod)
+# 4. Application-specific overrides
+# 5. Provider configuration inheritance (GitHubApp -> GitHubProject)
+#
+# DEVELOPMENT ENVIRONMENT CONFIGURATION:
+# =====================================
+#
+# From demo-dev KubEnv (examples/platform/overall/05-kubenvs.yaml):
+# - environmentType: dev
+# - resources.profile: small
+# - resources.defaults.requests: { cpu: "100m", memory: "128Mi" }
+# - resources.defaults.limits: { cpu: "500m", memory: "256Mi" }
+# - environmentConfig.variables: { ENVIRONMENT: "development", LOG_LEVEL: "debug", DEBUG_MODE: "true", ... }
+# - qualityGates:
+#   * smoke-test-gate (active, required, timeout: "5m")
+#   * security-scan-gate (proposed, optional, severity: "MEDIUM")
+# - sdlc.promotionPolicy: { automatic: true, requiresApproval: false }
+# - networking, security, observability configurations
+#
+# From XApp overrides (art-api development):
+# - replicas: 1
+# - environment: { NODE_ENV: "development", PORT: "8000", APP_NAME: "art-api", DATABASE_URL: "...", ... }
+# - resources.requests: { memory: "96Mi", cpu: "75m" }
+# - resources.limits: { memory: "256Mi", cpu: "400m" }
+# - qualityGates overrides:
+#   * smoke-test-gate: timeout="3m", appName="art-api", endpoints="/health,/api/v1/status,/api/v1/art"
+#   * security-scan-gate: required=true (was optional), appName="art-api"
+#
+# Final merged DEV configuration:
+# - replicas: 1
+# - resources:
+#     requests: { cpu: "75m" (XApp), memory: "96Mi" (XApp) }
+#     limits: { cpu: "400m" (XApp), memory: "256Mi" (XApp) }
+# - environment:
+#     ENVIRONMENT: "development" (KubEnv)
+#     LOG_LEVEL: "debug" (KubEnv)
+#     DEBUG_MODE: "true" (KubEnv)
+#     NODE_ENV: "development" (XApp)
+#     APP_NAME: "art-api" (XApp)
+#     DATABASE_URL: "postgresql://demo-dev-db:5432/artapi_dev" (XApp)
+#     ... (other merged variables)
+# - Quality Gates (merged):
+#     smoke-test-gate: active, required, timeout="3m", appName="art-api", endpoints="..."
+#     security-scan-gate: proposed, required (XApp override), severity="MEDIUM", appName="art-api"
+#
+# PRODUCTION ENVIRONMENT CONFIGURATION:
+# ====================================
+#
+# From demo-prod KubEnv:
+# - environmentType: prod
+# - resources.profile: medium
+# - resources.defaults.requests: { cpu: "200m", memory: "256Mi" }
+# - resources.defaults.limits: { cpu: "1000m", memory: "512Mi" }
+# - environmentConfig.variables: { ENVIRONMENT: "production", LOG_LEVEL: "info", ... }
+# - qualityGates:
+#   * smoke-test-gate (active, required, timeout: "10m")
+#   * security-scan-gate (active, required, severity: "HIGH")
+# - sdlc.promotionPolicy: { automatic: false, requiresApproval: true, ... }
+# - deploymentStrategy: canary with multiple steps
+# - Enhanced networking, security, observability for production
+#
+# From XApp overrides (art-api production):
+# - replicas: 3
+# - environment: production-specific variables with feature flags, rate limiting, etc.
+# - resources: much higher requests/limits for production load
+# - qualityGates enhancements:
+#   * smoke-test-gate: longer timeout, load testing, higher success threshold
+#   * security-scan-gate: comprehensive scanning including dependencies and compliance
+#
+# PROVIDER CONFIGURATION INHERITANCE:
+# ===================================
+#
+# GitHubApp (art-api) -> GitHubProject (demo-project) -> ProviderConfig (github-default)
+#
+# 1. GitHubProject defines provider configuration once:
+#    providerConfigRef.github: "github-default"
+#
+# 2. GitHubApp automatically inherits this configuration:
+#    - No secretRef needed in GitHubApp spec
+#    - Dynamic resolution at composition time
+#    - Fallback to "github-default" if GitHubProject not found
+#
+# 3. All GitHub resources (Repository, Teams, Actions, etc.) use inherited provider:
+#    - Centralized credential management
+#    - No duplication of provider configurations
+#    - Consistent authentication across all app resources
+#
+# INTEGRATION BENEFITS:
+# ===================
+# 1. Environment Consistency: All apps in demo-dev inherit same base configuration
+# 2. Application Flexibility: Each app can customize resources, environment vars, quality gates
+# 3. Quality Gate Reusability: Same quality gates used across environments with different parameters
+# 4. SDLC Integration: Quality gates automatically generate PromotionStrategy resources
+# 5. Operational Excellence: Centralized environment management with distributed customization
+# 6. Provider Config Inheritance: Centralized GitHub authentication with automatic inheritance

@@ -22,6 +22,15 @@ type Input struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	// Example is an example field. Replace it with whatever input you need. :)
-	Example string `json:"example"`
+	// EnableTransitiveDiscovery enables discovery of transitive schema dependencies
+	// +kubebuilder:default=true
+	EnableTransitiveDiscovery *bool `json:"enableTransitiveDiscovery,omitempty"`
+
+	// TraversalDepth specifies the maximum depth for transitive schema discovery
+	// +kubebuilder:default=3
+	TraversalDepth *int `json:"traversalDepth,omitempty"`
+
+	// IncludeFullSchema includes complete OpenAPI schema in response
+	// +kubebuilder:default=true
+	IncludeFullSchema *bool `json:"includeFullSchema,omitempty"`
 }
