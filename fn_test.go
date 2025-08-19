@@ -138,7 +138,7 @@ func TestRunFunction(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			f := &Function{log: logging.NewNopLogger()}
+			f := NewFunction(logging.NewNopLogger())
 
 			// Setup mock Kubernetes client if provided
 			if tc.mock != nil {
@@ -150,7 +150,7 @@ func TestRunFunction(t *testing.T) {
 						t.Fatalf("Failed to create mock CRD: %v", err)
 					}
 				}
-				f.k8sClient = fakeClient
+				f.SetKubernetesClient(fakeClient)
 			}
 
 			rsp, err := f.RunFunction(tc.args.ctx, tc.args.req)
