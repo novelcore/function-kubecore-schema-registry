@@ -24,7 +24,7 @@ env:
   XP_VERSION: v1.20.0
 
   # The package to push, without a version tag. The default matches GitHub. For
-  # example xpkg.crossplane.io/crossplane/function-kubecore-schema-registry. Note that
+  # example xpkg.crossplane.io/crossplane/function-template-go. Note that
   # xpkg.crossplane.io is just an alias for ghcr.io, so we upload to ghcr.io but
   # this'll be pulled from xpkg.crossplane.io.
   XPKG: ghcr.io/${{ github.repository}}
@@ -34,7 +34,7 @@ env:
 
 jobs:
   lint:
-    runs-on: [self-hosted, Linux, X64, novecore-1]
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -54,7 +54,7 @@ jobs:
           version: ${{ env.GOLANGCI_VERSION }}
 
   unit-test:
-    runs-on: [self-hosted, Linux, X64, novecore-1]
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -72,7 +72,7 @@ jobs:
   # those packages to GitHub as a build artifact. The push job downloads those
   # artifacts and pushes them as a single multi-platform package.
   build:
-    runs-on: [self-hosted, Linux, X64, novecore-1]
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: true
       matrix:
@@ -126,7 +126,7 @@ jobs:
   # This job downloads the single-platform packages built by the build job, and
   # pushes them as a multi-platform package.
   push:
-    runs-on: [self-hosted, Linux, X64, novecore-1]
+    runs-on: ubuntu-24.04
     needs:
       - build
     steps:
