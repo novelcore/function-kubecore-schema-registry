@@ -1,4 +1,3 @@
-# Composition Resource Definition
 apiVersion: apiextensions.crossplane.io/v1
 kind: CompositeResourceDefinition
 metadata:
@@ -39,18 +38,9 @@ spec:
           status:
             type: object
             properties:
-              context:
+              executionContext:
                 type: object
-                properties:
-                  resourceType:
-                    type: string
-                  resourceName:
-                    type: string
-                  resourceNamespace:
-                    type: string
-                  directReferences:
-                    type: array
-                    items:
-                      type: string
-                  transitiveDiscoveryEnabled:
-                    type: boolean
+              referencedResourceSchemas:
+                type: object
+              discoveryStats:
+                type: object

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -107,6 +108,20 @@ func TestRunFunction(t *testing.T) {
 					}
 				}
 
+				// Check if we have detailed status in desired composite
+				if rsp.Desired != nil && rsp.Desired.Composite != nil && rsp.Desired.Composite.Resource != nil {
+					statusFields := rsp.Desired.Composite.Resource.GetFields()
+					if statusField, exists := statusFields["status"]; exists {
+						if statusJSON, err := json.MarshalIndent(statusField, "", "  "); err == nil {
+							t.Logf("Detailed Status Output:\n%s", string(statusJSON))
+						}
+					} else {
+						t.Logf("Status field not found in composite resource")
+					}
+				} else {
+					t.Logf("No desired composite resource in response")
+				}
+				
 				t.Logf("Schema registry test completed successfully with %d results", len(rsp.Results))
 			}
 		})

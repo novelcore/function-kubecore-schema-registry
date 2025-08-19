@@ -1,8 +1,3 @@
-# Phase 1 Composition - Schema Registry Function Validation
-# This composition creates a simple XGitHubProject that references the demo-project
-# to test the context extraction capabilities of the function
----
-# Composition using the Schema Registry Function
 apiVersion: apiextensions.crossplane.io/v1
 kind: Composition
 metadata:
@@ -14,20 +9,18 @@ spec:
   compositeTypeRef:
     apiVersion: platform.kubecore.io/v1alpha1
     kind: XSchemaRegistry
-
   mode: Pipeline
   pipeline:
   - step: context-extraction
     functionRef:
       name: function-kubecore-schema-registry
     input:
-      apiVersion: template.fn.crossplane.io/v1beta1
+      apiVersion: fn.crossplane.io/v1beta1
       kind: Input
-      spec:
-        enableTransitiveDiscovery: true
-        traversalDepth: 3
+      enableTransitiveDiscovery: true
+      traversalDepth: 3
+      includeFullSchema: true
 
-  # ConfigMap resource using Kubernetes provider
   - step: create-configmap
     functionRef:
       name: function-go-templating
@@ -36,7 +29,7 @@ spec:
       kind: GoTemplate
       source: Inline
       inline:
-        template: |
+        template: |+
           {{ $ctx := .observed.composite.resource }}
           ---
           apiVersion: kubernetes.crossplane.io/v1alpha1
@@ -45,6 +38,7 @@ spec:
             name: {{ $ctx.metadata.name }}-context
             annotations:
               crossplane.io/external-name: {{ $ctx.metadata.name }}-context
+              gotemplating.fn.crossplane.io/composition-resource-name: {{ $ctx.metadata.name }}-context
           spec:
             forProvider:
               manifest:
@@ -59,4 +53,12 @@ spec:
                   githubProjectRef: "{{ $ctx.spec.githubProjectRef.name }}"
                   transitiveDiscovery: "{{ $ctx.spec.enableTransitiveDiscovery }}"
             providerConfigRef:
-              name: default
+              name: kubesys-enhanced
+              
+  # Auto-Ready Function (Aggregate child resource readiness)
+  - step: auto-ready
+    functionRef:
+      name: function-auto-ready
+    input:
+      apiVersion: autoready.fn.crossplane.io/v1beta1
+      kind: Input

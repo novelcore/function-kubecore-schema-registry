@@ -31,4 +31,4 @@ spec:
 
   # Provider Resolution - reference the GithubProvider to derive ProviderConfig dynamically
   githubProviderRef:
-    name: github-provider
+    name: gh-default
