@@ -17,7 +17,6 @@ import (
 	"github.com/crossplane/function-sdk-go/resource"
 	"github.com/crossplane/function-sdk-go/response"
 	"github.com/crossplane/function-kubecore-schema-registry/input/v1beta1"
-	"google.golang.org/protobuf/types/known/structpb"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
@@ -218,30 +217,13 @@ func (f *Function) RunFunction(ctx context.Context, req *fnv1.RunFunctionRequest
 		},
 	}
 
-	// Write detailed status to the composite resource
-	// Ensure we have a desired composite to write status to
-	if rsp.Desired == nil {
-		rsp.Desired = &fnv1.State{}
-	}
-	if rsp.Desired.Composite == nil {
-		rsp.Desired.Composite = &fnv1.Resource{}
-	}
-	
-	// If we don't have a desired composite resource, copy from observed
-	if rsp.Desired.Composite.Resource == nil && req.Observed != nil && req.Observed.Composite != nil {
-		rsp.Desired.Composite.Resource = req.Observed.Composite.Resource
-	}
-
-	// Set detailed status fields using structured data
-	if rsp.Desired.Composite.Resource != nil {
-		// Get or create status field
-		statusFields := rsp.Desired.Composite.Resource.GetFields()
-		if statusFields == nil {
-			statusFields = make(map[string]*structpb.Value)
-			rsp.Desired.Composite.Resource.Fields = statusFields
-		}
-		
-		// Convert our status data to protobuf values (convert structs to maps)
+	// Write detailed status using proper SDK approach to avoid managedFields errors
+	// Use request helper to get the composite resource properly
+	observedXR, err := request.GetObservedCompositeResource(req)
+	if err != nil {
+		f.slogger.Error("Failed to get observed composite resource", "correlationId", correlationID, "error", err)
+	} else if observedXR != nil {
+		// Prepare status data as JSON-serializable maps
 		statusData := make(map[string]interface{})
 		
 		// Convert ExecutionContext to map
@@ -252,7 +234,7 @@ func (f *Function) RunFunction(ctx context.Context, req *fnv1.RunFunctionRequest
 			}
 		}
 		
-		// Convert schemas to map
+		// Convert schemas to map  
 		if schemasJSON, err := json.Marshal(schemas); err == nil {
 			var schemasMap map[string]interface{}
 			if err := json.Unmarshal(schemasJSON, &schemasMap); err == nil {
@@ -268,15 +250,23 @@ func (f *Function) RunFunction(ctx context.Context, req *fnv1.RunFunctionRequest
 			}
 		}
 		
-		if statusValue, err := structpb.NewValue(statusData); err == nil {
-			statusFields["status"] = statusValue
-			f.slogger.Debug("Detailed status written to composite resource",
-				"correlationId", correlationID,
-				"schemasCount", len(schemas),
-				"referencesCount", stats.TotalReferencesFound)
+		// Set status fields on the XR (only status, preserving metadata)
+		if err := observedXR.Resource.SetValue("status.executionContext", statusData["executionContext"]); err != nil {
+			f.slogger.Error("Failed to set executionContext", "correlationId", correlationID, "error", err)
+		} else if err := observedXR.Resource.SetValue("status.referencedResourceSchemas", statusData["referencedResourceSchemas"]); err != nil {
+			f.slogger.Error("Failed to set referencedResourceSchemas", "correlationId", correlationID, "error", err)
+		} else if err := observedXR.Resource.SetValue("status.discoveryStats", statusData["discoveryStats"]); err != nil {
+			f.slogger.Error("Failed to set discoveryStats", "correlationId", correlationID, "error", err)
 		} else {
-			f.slogger.Error("Failed to convert status to protobuf value", 
-				"correlationId", correlationID, "error", err)
+			// Use SDK helper to properly set the desired composite resource
+			if err := response.SetDesiredCompositeResource(rsp, observedXR); err != nil {
+				f.slogger.Error("Failed to set desired composite resource", "correlationId", correlationID, "error", err)
+			} else {
+				f.slogger.Debug("Detailed status written to composite resource",
+					"correlationId", correlationID,
+					"schemasCount", len(schemas),
+					"referencesCount", stats.TotalReferencesFound)
+			}
 		}
 	}
 
