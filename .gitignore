@@ -19,3 +19,7 @@
 
 # Go workspace file
 go.work
+docker-compose.yml
+.env
+function
+volumes/

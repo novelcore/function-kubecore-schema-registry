@@ -1,3 +1,52 @@
+# Corrected Phase 1 Test Composition
+---
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xschemaregistries.platform.kubecore.io
+spec:
+  group: platform.kubecore.io
+  names:
+    kind: XSchemaRegistry
+    plural: xschemaregistries
+  versions:
+  - name: v1alpha1
+    served: true
+    referenceable: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              githubProjectRef:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  namespace:
+                    type: string
+                required:
+                - name
+              enableTransitiveDiscovery:
+                type: boolean
+                default: true
+              traversalDepth:
+                type: integer
+                default: 3
+            required:
+            - githubProjectRef
+          status:
+            type: object
+            properties:
+              executionContext:
+                type: object
+              referencedResourceSchemas:
+                type: object
+              discoveryStats:
+                type: object
+---
 apiVersion: apiextensions.crossplane.io/v1
 kind: Composition
 metadata:
@@ -21,6 +70,20 @@ spec:
       traversalDepth: 3
       includeFullSchema: true
 
+  - step: update-composite-status
+    functionRef:
+      name: function-go-templating
+    input:
+      apiVersion: gotemplating.fn.crossplane.io/v1beta1
+      kind: GoTemplate
+      source: Inline
+      inline:
+        template: |+
+          {{ $schemaData := index .context "kubecore.schemaRegistry.detailedStatus" }}
+          {{ if $schemaData }}
+          {{ $statusData := fromJson $schemaData.string_value }}
+          {{ end }}
+
   - step: create-configmap
     functionRef:
       name: function-go-templating
@@ -31,6 +94,7 @@ spec:
       inline:
         template: |+
           {{ $ctx := .observed.composite.resource }}
+          {{ $schemaData := index .context "kubecore.schemaRegistry.detailedStatus" }}
           ---
           apiVersion: kubernetes.crossplane.io/v1alpha1
           kind: Object
@@ -52,6 +116,9 @@ spec:
                   resourceName: "{{ $ctx.metadata.name }}"
                   githubProjectRef: "{{ $ctx.spec.githubProjectRef.name }}"
                   transitiveDiscovery: "{{ $ctx.spec.enableTransitiveDiscovery }}"
+                  {{ if $schemaData }}
+                  schemaRegistryResults: {{ $schemaData.string_value | quote }}
+                  {{ end }}
             providerConfigRef:
               name: kubesys-enhanced
               

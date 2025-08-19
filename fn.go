@@ -17,6 +17,7 @@ import (
 	"github.com/crossplane/function-sdk-go/resource"
 	"github.com/crossplane/function-sdk-go/response"
 	"github.com/crossplane/function-kubecore-schema-registry/input/v1beta1"
+	"google.golang.org/protobuf/types/known/structpb"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
@@ -217,58 +218,26 @@ func (f *Function) RunFunction(ctx context.Context, req *fnv1.RunFunctionRequest
 		},
 	}
 
-	// Write detailed status using proper SDK approach to avoid managedFields errors
-	// Use request helper to get the composite resource properly
-	observedXR, err := request.GetObservedCompositeResource(req)
-	if err != nil {
-		f.slogger.Error("Failed to get observed composite resource", "correlationId", correlationID, "error", err)
-	} else if observedXR != nil {
-		// Prepare status data as JSON-serializable maps
-		statusData := make(map[string]interface{})
-		
-		// Convert ExecutionContext to map
-		if execCtxJSON, err := json.Marshal(execCtx); err == nil {
-			var execCtxMap map[string]interface{}
-			if err := json.Unmarshal(execCtxJSON, &execCtxMap); err == nil {
-				statusData["executionContext"] = execCtxMap
-			}
-		}
-		
-		// Convert schemas to map  
-		if schemasJSON, err := json.Marshal(schemas); err == nil {
-			var schemasMap map[string]interface{}
-			if err := json.Unmarshal(schemasJSON, &schemasMap); err == nil {
-				statusData["referencedResourceSchemas"] = schemasMap
-			}
-		}
-		
-		// Convert stats to map
-		if statsJSON, err := json.Marshal(stats); err == nil {
-			var statsMap map[string]interface{}
-			if err := json.Unmarshal(statsJSON, &statsMap); err == nil {
-				statusData["discoveryStats"] = statsMap
-			}
-		}
-		
-		// Set status fields on the XR (only status, preserving metadata)
-		if err := observedXR.Resource.SetValue("status.executionContext", statusData["executionContext"]); err != nil {
-			f.slogger.Error("Failed to set executionContext", "correlationId", correlationID, "error", err)
-		} else if err := observedXR.Resource.SetValue("status.referencedResourceSchemas", statusData["referencedResourceSchemas"]); err != nil {
-			f.slogger.Error("Failed to set referencedResourceSchemas", "correlationId", correlationID, "error", err)
-		} else if err := observedXR.Resource.SetValue("status.discoveryStats", statusData["discoveryStats"]); err != nil {
-			f.slogger.Error("Failed to set discoveryStats", "correlationId", correlationID, "error", err)
-		} else {
-			// Use SDK helper to properly set the desired composite resource
-			if err := response.SetDesiredCompositeResource(rsp, observedXR); err != nil {
-				f.slogger.Error("Failed to set desired composite resource", "correlationId", correlationID, "error", err)
-			} else {
-				f.slogger.Debug("Detailed status written to composite resource",
-					"correlationId", correlationID,
-					"schemasCount", len(schemas),
-					"referencesCount", stats.TotalReferencesFound)
-			}
-		}
+	// IMPORTANT: Don't try to write composite resource status directly
+	// This causes managedFields conflicts in pipeline mode with multiple functions
+	// Instead, store the data in context and log it for access via other means
+	
+	// Store the status in context for potential access by other functions  
+	statusJSON, _ := json.Marshal(map[string]interface{}{
+		"executionContext": execCtx,
+		"referencedResourceSchemas": schemas,
+		"discoveryStats": stats,
+	})
+	
+	if statusValue, err := structpb.NewValue(string(statusJSON)); err == nil {
+		response.SetContextKey(rsp, "kubecore.schemaRegistry.detailedStatus", statusValue)
 	}
+	
+	f.slogger.Info("Schema registry discovery results available", 
+		"correlationId", correlationID,
+		"schemasCount", len(schemas),
+		"referencesCount", stats.TotalReferencesFound,
+		"statusSize", len(statusJSON))
 
 	// Convert response data to JSON for logging
 	if responseJSON, err := json.Marshal(responseData); err == nil {
