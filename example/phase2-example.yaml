@@ -1,0 +1,137 @@
+---
+# Phase 2 Input Configuration Example
+apiVersion: registry.fn.crossplane.io/v1beta1
+kind: Input
+metadata:
+  name: schema-registry-phase2
+# Enable Phase 2 features
+phase2Features: true
+fetchTimeout: "10s"
+maxConcurrentFetches: 5
+fetchResources:
+  # Direct resource fetch (Phase 1 compatibility)
+  - into: "directProject"
+    name: "example-project"
+    apiVersion: "github.platform.kubecore.io/v1alpha1"
+    kind: "GitHubProject"
+    optional: false
+
+  # Label-based discovery (Phase 2)
+  - into: "readyPods"
+    apiVersion: "v1"
+    kind: "Pod"
+    matchType: "label"
+    selector:
+      labels:
+        matchLabels:
+          app: "demo"
+          ready: "true"
+        matchExpressions:
+          - key: "tier"
+            operator: "In"
+            values: ["frontend", "backend"]
+          - key: "deprecated"
+            operator: "DoesNotExist"
+      crossNamespace: true
+      namespaces: ["default", "demo", "production"]
+    strategy:
+      minMatches: 1
+      maxMatches: 10
+      sortBy:
+        - field: "metadata.creationTimestamp"
+          order: "desc"
+        - field: "metadata.name"
+          order: "asc"
+      failOnConstraintViolation: false
+    optional: true
+
+  # Expression-based discovery (Phase 2)
+  - into: "loadBalancerServices"
+    apiVersion: "v1"
+    kind: "Service"
+    matchType: "expression"
+    selector:
+      expressions:
+        - field: "spec.type"
+          operator: "Equals"
+          value: "LoadBalancer"
+        - field: "status.loadBalancer.ingress"
+          operator: "Exists"
+        - field: "metadata.labels.environment"
+          operator: "In"
+          values: ["production", "staging"]
+    strategy:
+      maxMatches: 5
+      stopOnFirst: false
+      sortBy:
+        - field: "metadata.name"
+          order: "asc"
+    optional: true
+
+  # Complex expression discovery (Phase 2)
+  - into: "filteredDeployments"
+    apiVersion: "apps/v1"
+    kind: "Deployment"
+    matchType: "expression"
+    selector:
+      expressions:
+        - field: "spec.replicas"
+          operator: "NotEquals"
+          value: "0"
+        - field: "metadata.annotations.deployment.kubernetes.io/revision"
+          operator: "Exists"
+        - field: "metadata.name"
+          operator: "StartsWith"
+          value: "web-"
+        - field: "metadata.labels.version"
+          operator: "Regex"
+          value: "v[0-9]+\\.[0-9]+\\.[0-9]+"
+      namespaces: ["default", "applications"]
+    strategy:
+      minMatches: 0
+      maxMatches: 20
+      failOnConstraintViolation: true
+    optional: false
+---
+# Example showing mixed Phase 1 and Phase 2 usage
+apiVersion: registry.fn.crossplane.io/v1beta1
+kind: Input
+metadata:
+  name: mixed-phase-example
+phase2Features: true
+fetchResources:
+  # Phase 1: Direct fetch
+  - into: "mainConfig"
+    name: "app-config"
+    namespace: "default"
+    apiVersion: "v1"
+    kind: "ConfigMap"
+
+  # Phase 2: Label-based discovery for related ConfigMaps
+  - into: "relatedConfigs"
+    apiVersion: "v1"
+    kind: "ConfigMap"
+    matchType: "label"
+    selector:
+      labels:
+        matchLabels:
+          app: "demo-app"
+          type: "config"
+      namespaces: ["default"]
+    strategy:
+      maxMatches: 5
+
+  # Phase 2: Expression-based discovery for secrets
+  - into: "appSecrets"
+    apiVersion: "v1"
+    kind: "Secret"
+    matchType: "expression"
+    selector:
+      expressions:
+        - field: "metadata.labels.app"
+          operator: "Equals"
+          value: "demo-app"
+        - field: "type"
+          operator: "NotEquals"  
+          value: "kubernetes.io/service-account-token"
+    optional: true

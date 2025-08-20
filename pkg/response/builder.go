@@ -102,6 +102,25 @@ func (b *DefaultBuilder) BuildContext(fetchResult *discovery.FetchResult) (map[s
 		"errors":           b.buildErrorSummary(fetchResult.Summary.Errors),
 	}
 
+	// Add Phase 2 results if present
+	if fetchResult.Phase2Results != nil {
+		context["phase2Results"] = b.buildPhase2Results(fetchResult.Phase2Results)
+	}
+
+	// Add multi-resources for Phase 2 if present
+	if fetchResult.MultiResources != nil && len(fetchResult.MultiResources) > 0 {
+		multiResourcesContext := make(map[string]interface{})
+		for into, resources := range fetchResult.MultiResources {
+			var resourceList []map[string]interface{}
+			for _, fetchedResource := range resources {
+				resourceContext := b.buildResourceContext(fetchedResource)
+				resourceList = append(resourceList, resourceContext)
+			}
+			multiResourcesContext[into] = resourceList
+		}
+		context["multiResources"] = multiResourcesContext
+	}
+
 	return context, nil
 }
 
@@ -165,7 +184,7 @@ func (b *DefaultBuilder) buildResourceContext(fetchedResource *discovery.Fetched
 		}
 	}
 
-	context["_kubecore"] = map[string]interface{}{
+	kubecoreMetadata := map[string]interface{}{
 		"fetchStatus":    string(fetchedResource.Metadata.FetchStatus),
 		"fetchDuration":  fetchedResource.Metadata.FetchDuration.Milliseconds(),
 		"resourceExists": fetchedResource.Metadata.ResourceExists,
@@ -173,11 +192,60 @@ func (b *DefaultBuilder) buildResourceContext(fetchedResource *discovery.Fetched
 	}
 
 	if fetchedResource.Metadata.Error != nil {
-		context["_kubecore"].(map[string]interface{})["error"] = map[string]interface{}{
+		kubecoreMetadata["error"] = map[string]interface{}{
 			"code":    string(fetchedResource.Metadata.Error.Code),
 			"message": fetchedResource.Metadata.Error.Message,
 		}
 	}
+
+	// Add Phase 2 metadata if present
+	if fetchedResource.Metadata.Phase2Metadata != nil {
+		phase2Data := map[string]interface{}{
+			"matchedBy": fetchedResource.Metadata.Phase2Metadata.MatchedBy,
+		}
+		
+		if len(fetchedResource.Metadata.Phase2Metadata.SearchNamespaces) > 0 {
+			phase2Data["searchNamespaces"] = fetchedResource.Metadata.Phase2Metadata.SearchNamespaces
+		}
+		
+		if fetchedResource.Metadata.Phase2Metadata.SortPosition != nil {
+			phase2Data["sortPosition"] = *fetchedResource.Metadata.Phase2Metadata.SortPosition
+		}
+		
+		if fetchedResource.Metadata.Phase2Metadata.MatchDetails != nil {
+			matchDetails := make(map[string]interface{})
+			
+			if len(fetchedResource.Metadata.Phase2Metadata.MatchDetails.MatchedLabels) > 0 {
+				matchDetails["matchedLabels"] = fetchedResource.Metadata.Phase2Metadata.MatchDetails.MatchedLabels
+			}
+			
+			if fetchedResource.Metadata.Phase2Metadata.MatchDetails.MatchScore != nil {
+				matchDetails["matchScore"] = *fetchedResource.Metadata.Phase2Metadata.MatchDetails.MatchScore
+			}
+			
+			if len(fetchedResource.Metadata.Phase2Metadata.MatchDetails.MatchedExpressions) > 0 {
+				var expressions []map[string]interface{}
+				for _, expr := range fetchedResource.Metadata.Phase2Metadata.MatchDetails.MatchedExpressions {
+					expressions = append(expressions, map[string]interface{}{
+						"field":         expr.Field,
+						"operator":      expr.Operator,
+						"expectedValue": expr.ExpectedValue,
+						"actualValue":   expr.ActualValue,
+						"matched":       expr.Matched,
+					})
+				}
+				matchDetails["matchedExpressions"] = expressions
+			}
+			
+			if len(matchDetails) > 0 {
+				phase2Data["matchDetails"] = matchDetails
+			}
+		}
+		
+		kubecoreMetadata["phase2"] = phase2Data
+	}
+
+	context["_kubecore"] = kubecoreMetadata
 
 	return context
 }
@@ -247,6 +315,55 @@ func (h *TemplateHelpers) HasResource(context map[string]interface{}, into strin
 	}
 
 	return status == string(discovery.FetchStatusSuccess)
+}
+
+// buildPhase2Results builds Phase 2 results for the context
+func (b *DefaultBuilder) buildPhase2Results(phase2Results *discovery.Phase2Results) map[string]interface{} {
+	results := make(map[string]interface{})
+
+	// Add query plan if present
+	if phase2Results.QueryPlan != nil {
+		results["queryPlan"] = map[string]interface{}{
+			"totalQueries":     phase2Results.QueryPlan.TotalQueries,
+			"batchedQueries":   phase2Results.QueryPlan.BatchedQueries,
+			"optimizedQueries": phase2Results.QueryPlan.OptimizedQueries,
+			"executionSteps":   phase2Results.QueryPlan.ExecutionSteps,
+		}
+	}
+
+	// Add performance metrics if present
+	if phase2Results.Performance != nil {
+		results["performance"] = map[string]interface{}{
+			"queryPlanningTime":      phase2Results.Performance.QueryPlanningTime.Milliseconds(),
+			"kubernetesAPITime":      phase2Results.Performance.KubernetesAPITime.Milliseconds(),
+			"filteringTime":          phase2Results.Performance.FilteringTime.Milliseconds(),
+			"sortingTime":            phase2Results.Performance.SortingTime.Milliseconds(),
+			"totalResourcesScanned":  phase2Results.Performance.TotalResourcesScanned,
+			"cacheHitRate":           phase2Results.Performance.CacheHitRate,
+		}
+	}
+
+	// Add constraint results if present
+	if len(phase2Results.ConstraintResults) > 0 {
+		constraintResults := make(map[string]interface{})
+		for requestName, constraintResult := range phase2Results.ConstraintResults {
+			constraintResults[requestName] = map[string]interface{}{
+				"expected": map[string]interface{}{
+					"minMatches":    constraintResult.Expected.MinMatches,
+					"maxMatches":    constraintResult.Expected.MaxMatches,
+					"actualMatches": constraintResult.Expected.ActualMatches,
+				},
+				"actual": map[string]interface{}{
+					"actualMatches": constraintResult.Actual.ActualMatches,
+				},
+				"satisfied": constraintResult.Satisfied,
+				"message":   constraintResult.Message,
+			}
+		}
+		results["constraintResults"] = constraintResults
+	}
+
+	return results
 }
 
 // GetResourceField safely gets a field from a resource

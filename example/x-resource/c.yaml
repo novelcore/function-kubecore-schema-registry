@@ -1,3 +1,52 @@
+# XRD Definition for Schema Registry Test
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xschemaregistrytests.test.kubecore.platform.io
+spec:
+  group: test.kubecore.platform.io
+  names:
+    kind: XSchemaRegistryTest
+    plural: xschemaregistrytests
+  claimNames:
+    kind: SchemaRegistryTest
+    plural: schemaregistrytests
+  versions:
+  - name: v1alpha1
+    served: true
+    referenceable: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              testName:
+                type: string
+                description: "Name identifier for this test run"
+              description:
+                type: string
+                description: "Description of what this test validates"
+            required:
+            - testName
+          status:
+            type: object
+            properties:
+              fetchSummary:
+                type: object
+                properties:
+                  totalRequested:
+                    type: integer
+                  successful:
+                    type: integer
+                  failed:
+                    type: integer
+                  skipped:
+                    type: integer
+                  executionTime:
+                    type: string
+---
 # test-composition.yaml
 apiVersion: apiextensions.crossplane.io/v1
 kind: Composition
@@ -48,6 +97,7 @@ spec:
       inline:
         template: |
           {{- $resources := index .context "kubecore-schema-registry.fn.kubecore.platform.io/fetched-resources" }}
+          {{- $fetchSummary := index $resources "fetchSummary" }}
           {{- $testName := .observed.composite.resource.spec.testName }}
           {{- $namespace := .observed.composite.resource.metadata.namespace | default "default" }}
 
@@ -59,6 +109,7 @@ spec:
             name: {{ $testName }}-summary
             annotations:
               crossplane.io/external-name: {{ $testName }}-summary
+              gotemplating.fn.crossplane.io/composition-resource-name: {{ $testName }}-summary
           spec:
             forProvider:
               manifest:
@@ -74,14 +125,20 @@ spec:
                     kubecore.io/fetched-at: {{ now | date "2006-01-02T15:04:05Z07:00" }}
                 data:
                   test-name: {{ $testName }}
-                  total-resource-types: "{{ len $resources }}"
-                  {{- if index $resources "githubProject" }}
-                  github-project-count: "{{ len (index $resources "githubProject") }}"
+                  total-resource-types: "{{ $fetchSummary.successful }}"
+                  {{- if $fetchSummary }}
+                  fetch-summary-total: "{{ $fetchSummary.totalRequested }}"
+                  fetch-summary-successful: "{{ $fetchSummary.successful }}"
+                  fetch-summary-failed: "{{ $fetchSummary.failed }}"
+                  fetch-summary-skipped: "{{ $fetchSummary.skipped }}"
+                  {{- end }}
+                  {{- if $resources.githubProject }}
+                  github-project-count: "1"
                   {{- else }}
                   github-project-count: "0"
                   {{- end }}
-                  {{- if index $resources "githubProvider" }}
-                  github-provider-count: "{{ len (index $resources "githubProvider") }}"
+                  {{- if $resources.githubProvider }}
+                  github-provider-count: "1"
                   {{- else }}
                   github-provider-count: "0"
                   {{- end }}
@@ -89,15 +146,16 @@ spec:
               name: kubesys-enhanced
 
           {{- /* GitHubProject Details ConfigMap */}}
-          {{- if index $resources "githubProject" }}
-          {{- range $i, $project := index $resources "githubProject" }}
+          {{- if $resources.githubProject }}
+          {{- $project := $resources.githubProject }}
           ---
           apiVersion: kubernetes.crossplane.io/v1alpha2
           kind: Object
           metadata:
-            name: {{ $testName }}-githubproject-{{ $i }}
+            name: {{ $testName }}-githubproject-details
             annotations:
               crossplane.io/external-name: {{ $testName }}-githubproject-{{ $project.metadata.name }}
+              gotemplating.fn.crossplane.io/composition-resource-name: {{ $testName }}-githubproject-details
           spec:
             forProvider:
               manifest:
@@ -142,18 +200,18 @@ spec:
             providerConfigRef:
               name: kubesys-enhanced
           {{- end }}
-          {{- end }}
 
           {{- /* GithubProvider Details ConfigMap */}}
-          {{- if index $resources "githubProvider" }}
-          {{- range $i, $provider := index $resources "githubProvider" }}
+          {{- if $resources.githubProvider }}
+          {{- $provider := $resources.githubProvider }}
           ---
           apiVersion: kubernetes.crossplane.io/v1alpha2
           kind: Object
           metadata:
-            name: {{ $testName }}-githubprovider-{{ $i }}
+            name: {{ $testName }}-githubprovider-details
             annotations:
               crossplane.io/external-name: {{ $testName }}-githubprovider-{{ $provider.metadata.name }}
+              gotemplating.fn.crossplane.io/composition-resource-name: {{ $testName }}-githubprovider-details
           spec:
             forProvider:
               manifest:
@@ -200,7 +258,6 @@ spec:
             providerConfigRef:
               name: kubesys-enhanced
           {{- end }}
-          {{- end }}
 
           {{- /* Relationships Discovery ConfigMap */}}
           ---
@@ -210,6 +267,7 @@ spec:
             name: {{ $testName }}-relationships
             annotations:
               crossplane.io/external-name: {{ $testName }}-relationships
+              gotemplating.fn.crossplane.io/composition-resource-name: {{ $testName }}-relationships
           spec:
             forProvider:
               manifest:
@@ -224,14 +282,13 @@ spec:
                   annotations:
                     kubecore.io/generated-at: {{ now | date "2006-01-02T15:04:05Z07:00" }}
                 data:
-                  {{- if and (index $resources "githubProject") (index $resources "githubProvider") }}
-                  {{- range $project := index $resources "githubProject" }}
+                  {{- if and $resources.githubProject $resources.githubProvider }}
+                  {{- $project := $resources.githubProject }}
                   {{- if $project.spec.githubProviderRef }}
                   project-{{ $project.metadata.name }}-provider: {{ $project.spec.githubProviderRef.name }}
                   {{- end }}
                   {{- end }}
-                  {{- end }}
-                  relationship-count: "{{ if index $resources "githubProject" }}{{ len (index $resources "githubProject") }}{{ else }}0{{ end }}"
+                  relationship-count: "{{ if $resources.githubProject }}1{{ else }}0{{ end }}"
             providerConfigRef:
               name: kubesys-enhanced
 
@@ -243,6 +300,7 @@ spec:
             name: {{ $testName }}-debug
             annotations:
               crossplane.io/external-name: {{ $testName }}-debug
+              gotemplating.fn.crossplane.io/composition-resource-name: {{ $testName }}-debug
           spec:
             forProvider:
               manifest:
@@ -262,15 +320,27 @@ spec:
                     - {{ $key }}
                     {{- end }}
                   resource-types-fetched: |
-                    {{- range $key, $_ := $resources }}
-                    - {{ $key }}
+                    {{- if $resources.githubProject }}
+                    - githubProject
+                    {{- end }}
+                    {{- if $resources.githubProvider }}
+                    - githubProvider
+                    {{- end }}
+                    {{- if not (or $resources.githubProject $resources.githubProvider) }}
+                    No resources fetched
                     {{- end }}
                   raw-output-sample: |
-                    {{- if index $resources "githubProject" }}
-                    {{- $sample := index (index $resources "githubProject") 0 }}
+                    {{- if $resources.githubProject }}
+                    {{- $sample := $resources.githubProject }}
                     {{ $sample | toYaml | nindent 20 }}
                     {{- else }}
                     No GitHubProject found
+                    {{- end }}
+                  fetch-summary-raw: |
+                    {{- if $fetchSummary }}
+                    {{ $fetchSummary | toYaml | nindent 20 }}
+                    {{- else }}
+                    No fetch summary available
                     {{- end }}
             providerConfigRef:
               name: kubesys-enhanced

@@ -1,17 +1,108 @@
-# test-claim-simple.yaml
+# Test Case 1: Basic Dual Resource Fetch (Primary Success Case)
 apiVersion: test.kubecore.platform.io/v1alpha1
 kind: SchemaRegistryTest
 metadata:
-  name: phase1-simple-test
+  name: phase1-dual-resource-test
   namespace: default
 spec:
-  testName: phase1-github
-  resources:
-  - apiVersion: github.platform.kubecore.io/v1alpha1
-    kind: GitHubProject
-    name: demo-project
-    namespace: test
-  # - apiVersion: github.platform.kubecore.io/v1alpha1
-  #   kind: GithubProvider
-  #   name: gh-default
-  #   namespace: default
+  testName: phase1-dual-github
+  description: "Test fetching both GitHubProject and GithubProvider resources successfully"
+
+# ---
+# # Test Case 2: GitHubProject Only (Isolation Test)
+# apiVersion: test.kubecore.platform.io/v1alpha1
+# kind: SchemaRegistryTest
+# metadata:
+#   name: phase1-project-only-test
+#   namespace: default
+# spec:
+#   testName: phase1-project-only
+#   description: "Test fetching only GitHubProject resource to isolate functionality"
+
+# ---
+# # Test Case 3: GithubProvider Only (Isolation Test)  
+# apiVersion: test.kubecore.platform.io/v1alpha1
+# kind: SchemaRegistryTest
+# metadata:
+#   name: phase1-provider-only-test
+#   namespace: default
+# spec:
+#   testName: phase1-provider-only
+#   description: "Test fetching only GithubProvider resource to isolate functionality"
+
+# ---
+# # Test Case 4: Partial Failure Test (Error Recovery)
+# apiVersion: test.kubecore.platform.io/v1alpha1
+# kind: SchemaRegistryTest
+# metadata:
+#   name: phase1-partial-failure-test
+#   namespace: default
+# spec:
+#   testName: phase1-partial-failure
+#   description: "Test function behavior with one valid and one invalid resource"
+
+# ---
+# # Test Case 5: Namespace Validation Test
+# apiVersion: test.kubecore.platform.io/v1alpha1
+# kind: SchemaRegistryTest
+# metadata:
+#   name: phase1-namespace-test
+#   namespace: custom-test-ns
+# spec:
+#   testName: phase1-namespace-validation
+#   description: "Test resource fetching across different namespaces and custom XR namespace"
+
+# ---
+# # Test Case 6: Performance Test (Multiple Resources)
+# apiVersion: test.kubecore.platform.io/v1alpha1
+# kind: SchemaRegistryTest
+# metadata:
+#   name: phase1-performance-test
+#   namespace: default
+# spec:
+#   testName: phase1-performance
+#   description: "Test function performance with multiple resource fetch requests"
+
+# ---
+# # Test Case 7: Context Structure Validation
+# apiVersion: test.kubecore.platform.io/v1alpha1
+# kind: SchemaRegistryTest
+# metadata:
+#   name: phase1-context-validation-test
+#   namespace: default
+# spec:
+#   testName: phase1-context-validation
+#   description: "Test to validate exact context structure and template compatibility"
+
+# ---
+# # Test Case 8: Resource Not Found Test (Full Failure)
+# apiVersion: test.kubecore.platform.io/v1alpha1
+# kind: SchemaRegistryTest
+# metadata:
+#   name: phase1-not-found-test
+#   namespace: default
+# spec:
+#   testName: phase1-not-found
+#   description: "Test function behavior when all requested resources do not exist"
+
+# ---
+# # Test Case 9: Timeout and Concurrent Fetch Test
+# apiVersion: test.kubecore.platform.io/v1alpha1
+# kind: SchemaRegistryTest
+# metadata:
+#   name: phase1-timeout-test
+#   namespace: default
+# spec:
+#   testName: phase1-timeout-concurrent
+#   description: "Test function timeout handling and concurrent fetch limits"
+
+# ---
+# # Test Case 10: Legacy Context Key Compatibility Test
+# apiVersion: test.kubecore.platform.io/v1alpha1
+# kind: SchemaRegistryTest
+# metadata:
+#   name: phase1-legacy-context-test
+#   namespace: default
+# spec:
+#   testName: phase1-legacy-context
+#   description: "Test backward compatibility with legacy context key 'schemaRegistryResults'"

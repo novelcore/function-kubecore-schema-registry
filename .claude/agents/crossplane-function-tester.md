@@ -20,12 +20,20 @@ When you receive a testing request, you will:
 - Create Compositions that utilize the function with appropriate input parameters
 - Generate example Composite Resources (XRs) that trigger the specific code paths
 - Ensure test cases cover both positive scenarios and edge cases
+- The composition and definition you will test against, should be placed at example/x-resource/c.yaml
+- The resources you will use to test against should be placed at example/x-resource/r.yaml
+- After the tests those files should contain the final working version of composition/definition & resources used to test against
+- You can use the existing platform resources located at example/resources
+- You should not delete or create new platform resources apart from the testing composition/definition/claim resource
+- You are allowed to edit the existing platform resources located at example/resources and apply them to the cluster, so as to alter their state in case you need to verify the functionality (eg. add/remove labels)
+- You can find the expected function Input at : input/ directory.
 
 **3. EXECUTE LIVE TESTING**
 - Apply your test resources to the Kubernetes cluster using kubectl
 - Monitor resource creation and status progression
 - Capture actual results from the deployed resources
 - Observe any error conditions or unexpected behaviors
+- Once you rich a final conclusion be sure to remove any resources you created eg. composition/definition/claim for testing purposes.
 
 **4. VALIDATE AGAINST EXPECTATIONS**
 - Compare actual results with the specified expected outcomes

@@ -298,6 +298,138 @@ func TestXRParser(t *testing.T) {
 	}
 }
 
+// Phase 2 Tests
+
+func TestPhase2Features(t *testing.T) {
+	type args struct {
+		ctx context.Context
+		req *fnv1.RunFunctionRequest
+	}
+
+	cases := map[string]struct {
+		reason string
+		args   args
+	}{
+		"Phase2EnabledWithLabelSelector": {
+			reason: "Should handle Phase 2 label selector requests",
+			args: args{
+				ctx: context.Background(),
+				req: &fnv1.RunFunctionRequest{
+					Meta: &fnv1.RequestMeta{Tag: "test"},
+					Observed: &fnv1.State{
+						Composite: &fnv1.Resource{
+							Resource: resource.MustStructJSON(`{
+								"apiVersion": "test.kubecore.io/v1alpha1",
+								"kind": "TestXR",
+								"metadata": {
+									"name": "test-xr"
+								},
+								"spec": {}
+							}`),
+						},
+					},
+					Input: resource.MustStructJSON(`{
+						"apiVersion": "registry.fn.crossplane.io/v1beta1",
+						"kind": "Input",
+						"phase2Features": true,
+						"fetchResources": [
+							{
+								"into": "labeledPods",
+								"apiVersion": "v1",
+								"kind": "Pod",
+								"matchType": "label",
+								"selector": {
+									"labels": {
+										"matchLabels": {
+											"app": "test"
+										}
+									},
+									"crossNamespace": true
+								},
+								"strategy": {
+									"maxMatches": 5,
+									"sortBy": [
+										{
+											"field": "metadata.creationTimestamp",
+											"order": "desc"
+										}
+									]
+								},
+								"optional": true
+							}
+						]
+					}`),
+				},
+			},
+		},
+		"BackwardCompatibilityTest": {
+			reason: "Should maintain backward compatibility with Phase 1 requests",
+			args: args{
+				ctx: context.Background(),
+				req: &fnv1.RunFunctionRequest{
+					Meta: &fnv1.RequestMeta{Tag: "test"},
+					Observed: &fnv1.State{
+						Composite: &fnv1.Resource{
+							Resource: resource.MustStructJSON(`{
+								"apiVersion": "test.kubecore.io/v1alpha1",
+								"kind": "TestXR",
+								"metadata": {
+									"name": "test-xr"
+								},
+								"spec": {}
+							}`),
+						},
+					},
+					Input: resource.MustStructJSON(`{
+						"apiVersion": "registry.fn.crossplane.io/v1beta1",
+						"kind": "Input",
+						"fetchResources": [
+							{
+								"into": "directResource",
+								"name": "test-resource",
+								"apiVersion": "v1",
+								"kind": "ConfigMap",
+								"optional": true
+							}
+						]
+					}`),
+				},
+			},
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			f := NewFunction(logging.NewNopLogger())
+			rsp, err := f.RunFunction(tc.args.ctx, tc.args.req)
+
+			// Basic functional test - should not panic and should return a response
+			if rsp == nil {
+				t.Errorf("%s\nExpected response but got nil", tc.reason)
+			}
+
+			// Should not return error
+			if err != nil {
+				t.Errorf("%s\nUnexpected error: %v", tc.reason, err)
+			}
+		})
+	}
+}
+
+// Helper functions for tests
+
+func boolPtr(b bool) *bool {
+	return &b
+}
+
+func stringPtr(s string) *string {
+	return &s
+}
+
+func intPtr(i int) *int {
+	return &i
+}
+
 // Test embedded registry functionality
 func TestEmbeddedRegistry(t *testing.T) {
 	f := NewFunction(logging.NewNopLogger())

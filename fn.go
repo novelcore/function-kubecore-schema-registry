@@ -19,14 +19,14 @@ import (
 	responsebuilder "github.com/crossplane/function-kubecore-schema-registry/pkg/response"
 )
 
-// Function implements the KubeCore Schema Registry Function Phase 1
+// Function implements the KubeCore Schema Registry Function (Phase 1 & 2)
 type Function struct {
 	fnv1.UnimplementedFunctionRunnerServiceServer
 	log logging.Logger
 	
-	// Phase 1 components
-	registry      registry.Registry
-	parser        parser.XRParser
+	// Core components
+	registry        registry.Registry
+	parser          parser.XRParser
 	responseBuilder responsebuilder.Builder
 }
 
@@ -47,7 +47,16 @@ func (f *Function) RunFunction(ctx context.Context, req *fnv1.RunFunctionRequest
 	// Initialize response with default TTL
 	rsp := response.To(req, response.DefaultTTL)
 
-	f.log.Info("KubeCore Schema Registry Function Phase 1 starting")
+	// Determine phase based on input
+	phase := "1"
+	tempInput := &v1beta1.Input{}
+	if request.GetInput(req, tempInput) == nil {
+		if tempInput.Phase2Features != nil && *tempInput.Phase2Features {
+			phase = "2"
+		}
+	}
+	
+	f.log.Info("KubeCore Schema Registry Function starting", "phase", phase)
 
 	// Extract and validate XR
 	xr, err := request.GetObservedCompositeResource(req)
@@ -108,13 +117,17 @@ func (f *Function) RunFunction(ctx context.Context, req *fnv1.RunFunctionRequest
 		maxConcurrent = *in.MaxConcurrentFetches
 	}
 
+	// Determine if Phase 2 features are enabled
+	phase2Enabled := in.Phase2Features != nil && *in.Phase2Features
+	
 	f.log.Info("Fetch configuration", 
 		"timeout", timeout,
 		"maxConcurrent", maxConcurrent,
-		"requestCount", len(fetchRequests))
+		"requestCount", len(fetchRequests),
+		"phase2Enabled", phase2Enabled)
 
-	// Create discovery engine
-	discoveryEngine, err := f.createDiscoveryEngine(timeout, maxConcurrent)
+	// Create discovery engine with Phase 2 capabilities if enabled
+	discoveryEngine, err := f.createDiscoveryEngine(timeout, maxConcurrent, phase2Enabled)
 	if err != nil {
 		response.Fatal(rsp, errors.Wrap(err, "failed to create discovery engine"))
 		return rsp, nil
@@ -164,24 +177,42 @@ func (f *Function) RunFunction(ctx context.Context, req *fnv1.RunFunctionRequest
 	executionTime := time.Since(startTime)
 	f.log.Info("Function execution completed", 
 		"executionTime", executionTime,
-		"phase", "1")
+		"phase", phase)
 
 	return rsp, nil
 }
 
 // createDiscoveryEngine creates a Kubernetes discovery engine
-func (f *Function) createDiscoveryEngine(timeout time.Duration, maxConcurrent int) (discovery.Engine, error) {
+func (f *Function) createDiscoveryEngine(timeout time.Duration, maxConcurrent int, phase2Enabled bool) (discovery.Engine, error) {
 	// Get in-cluster configuration
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		return nil, errors.KubernetesClientError(fmt.Sprintf("failed to get in-cluster config: %v", err))
 	}
 
-	// Create Kubernetes discovery engine
-	engine, err := discovery.NewKubernetesEngineWithTimeout(config, f.registry, timeout, maxConcurrent)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to create Kubernetes discovery engine")
-	}
+	// Use enhanced engine if Phase 2 is enabled, otherwise use legacy engine for compatibility
+	if phase2Enabled {
+		// Create enhanced discovery engine with Phase 2 capabilities
+		discoveryContext := discovery.DiscoveryContext{
+			FunctionNamespace:     "crossplane-system", // TODO: Get actual namespace
+			TimeoutPerRequest:     timeout,
+			MaxConcurrentRequests: maxConcurrent,
+			Phase2Enabled:         true,
+		}
+		
+		engine, err := discovery.NewEnhancedEngine(config, f.registry, discoveryContext)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to create enhanced discovery engine")
+		}
+		
+		return engine, nil
+	} else {
+		// Create legacy Kubernetes discovery engine for Phase 1 compatibility
+		engine, err := discovery.NewKubernetesEngineWithTimeout(config, f.registry, timeout, maxConcurrent)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to create Kubernetes discovery engine")
+		}
 
-	return engine, nil
+		return engine, nil
+	}
 }

@@ -26,6 +26,14 @@ const (
 	ErrorCodeKubernetesClient     ErrorCode = "KUBERNETES_CLIENT_ERROR"
 	ErrorCodeInternalError        ErrorCode = "INTERNAL_ERROR"
 	ErrorCodeTimeout              ErrorCode = "TIMEOUT"
+	
+	// Phase 2 specific errors
+	ErrorCodeInvalidSelector      ErrorCode = "INVALID_SELECTOR"
+	ErrorCodeInvalidExpression    ErrorCode = "INVALID_EXPRESSION"
+	ErrorCodeConstraintViolation  ErrorCode = "CONSTRAINT_VIOLATION"
+	ErrorCodeUnsupportedMatchType ErrorCode = "UNSUPPORTED_MATCH_TYPE"
+	ErrorCodeQueryOptimization    ErrorCode = "QUERY_OPTIMIZATION_ERROR"
+	ErrorCodeSelectorCompilation  ErrorCode = "SELECTOR_COMPILATION_ERROR"
 )
 
 // FunctionError represents a comprehensive error with context
@@ -171,4 +179,36 @@ func ResourceTimeoutError(ref ResourceRef, timeout time.Duration) *FunctionError
 // KubernetesClientError creates a Kubernetes client error
 func KubernetesClientError(message string) *FunctionError {
 	return New(ErrorCodeKubernetesClient, message)
+}
+
+// Phase 2 Error Constructors
+
+// InvalidSelectorError creates an invalid selector error
+func InvalidSelectorError(message string) *FunctionError {
+	return New(ErrorCodeInvalidSelector, message)
+}
+
+// InvalidExpressionError creates an invalid expression error
+func InvalidExpressionError(message string) *FunctionError {
+	return New(ErrorCodeInvalidExpression, message)
+}
+
+// ConstraintViolationError creates a constraint violation error
+func ConstraintViolationError(message string) *FunctionError {
+	return New(ErrorCodeConstraintViolation, message)
+}
+
+// UnsupportedMatchTypeError creates an unsupported match type error
+func UnsupportedMatchTypeError(matchType string) *FunctionError {
+	return New(ErrorCodeUnsupportedMatchType, fmt.Sprintf("unsupported match type: %s", matchType))
+}
+
+// QueryOptimizationError creates a query optimization error
+func QueryOptimizationError(message string) *FunctionError {
+	return New(ErrorCodeQueryOptimization, message)
+}
+
+// SelectorCompilationError creates a selector compilation error
+func SelectorCompilationError(message string) *FunctionError {
+	return New(ErrorCodeSelectorCompilation, message)
 }
