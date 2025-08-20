@@ -118,7 +118,7 @@ spec:
               
           {{ range .context.schemaRegistryResults.referenceChains }}### {{ .path }}
               ```
-              {{ range $i, $resource := .resources }}{{ if $i }} -> {{ end }}{{ $resource }} ({{ index $.context.schemaRegistryResults.referenceChains 0 .kinds $i }}){{ end }}
+              {{ range $i, $resource := .resources }}{{ if $i }} -> {{ end }}{{ $resource }} ({{ index $.kinds $i }}){{ end }}
               ```
           {{ end }}
               ## Resource Schemas

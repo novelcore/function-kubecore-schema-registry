@@ -18,6 +18,7 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/fake"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 func TestRunFunction(t *testing.T) {
@@ -198,7 +199,7 @@ func validateSchemaRegistryResponse(t *testing.T, reason string, rsp *fnv1.RunFu
 		t.Logf("Available Context Keys (%d total):", len(contextFields))
 		for key, value := range contextFields {
 			if key == "kubecore.schemaRegistry.detailedStatus" {
-				t.Logf("✅ Found schema registry context key: %s", key)
+				t.Logf("✅ Found legacy schema registry context key: %s", key)
 				if value.GetStringValue() != "" {
 					contextStr := value.GetStringValue()
 					if len(contextStr) > 500 {
@@ -213,6 +214,14 @@ func validateSchemaRegistryResponse(t *testing.T, reason string, rsp *fnv1.RunFu
 					} else {
 						t.Errorf("Failed to parse context data as JSON: %v", err)
 					}
+				}
+			} else if key == "schemaRegistryResults" {
+				t.Logf("✅ Found NEW schema registry context key: %s", key)
+				// Test structured access to the new format
+				if structValue := value.GetStructValue(); structValue != nil {
+					validateNewSchemaRegistryResults(t, structValue, testName)
+				} else {
+					t.Errorf("Expected structured data for schemaRegistryResults, got: %T", value)
 				}
 			} else {
 				t.Logf("  %s: %s", key, value.GetStringValue())
@@ -343,6 +352,85 @@ func validateSchemaStructure(t *testing.T, refName string, schema map[string]int
 			}
 		}
 	}
+}
+
+// validateNewSchemaRegistryResults validates the structured schema registry results
+func validateNewSchemaRegistryResults(t *testing.T, structValue *structpb.Struct, testName string) {
+	fields := structValue.GetFields()
+	
+	// Check for required fields
+	requiredFields := []string{"discoveredResources", "resourceSchemas", "referenceChains", "resourcesByKind", "discoveryStats"}
+	for _, field := range requiredFields {
+		if _, exists := fields[field]; !exists {
+			t.Errorf("Missing required field in schemaRegistryResults: %s", field)
+		} else {
+			t.Logf("✅ Found required field: %s", field)
+		}
+	}
+	
+	// Validate discoveryStats structure
+	if discoveryStats, exists := fields["discoveryStats"]; exists {
+		if statsStruct := discoveryStats.GetStructValue(); statsStruct != nil {
+			statsFields := statsStruct.GetFields()
+			expectedStats := []string{"totalResourcesFound", "totalSchemasRetrieved", "maxDepthReached", "executionTimeMs"}
+			for _, stat := range expectedStats {
+				if _, exists := statsFields[stat]; exists {
+					t.Logf("✅ Found discovery stat: %s", stat)
+				} else {
+					t.Errorf("Missing discovery stat: %s", stat)
+				}
+			}
+			
+			// Test actual values
+			if totalResources, exists := statsFields["totalResourcesFound"]; exists {
+				if count := int(totalResources.GetNumberValue()); count > 0 {
+					t.Logf("✅ Total resources found: %d", count)
+				}
+			}
+			
+			if executionTime, exists := statsFields["executionTimeMs"]; exists {
+				if timeMs := int(executionTime.GetNumberValue()); timeMs >= 0 {
+					t.Logf("✅ Execution time: %dms", timeMs)
+				}
+			}
+		}
+	}
+	
+	// Validate discoveredResources array
+	if discoveredResources, exists := fields["discoveredResources"]; exists {
+		if resourcesList := discoveredResources.GetListValue(); resourcesList != nil {
+			values := resourcesList.GetValues()
+			t.Logf("✅ Found %d discovered resources", len(values))
+			
+			// Validate first resource structure
+			if len(values) > 0 {
+				if firstResource := values[0].GetStructValue(); firstResource != nil {
+					resourceFields := firstResource.GetFields()
+					requiredResourceFields := []string{"name", "kind", "apiVersion", "referencedBy", "depth", "source"}
+					for _, field := range requiredResourceFields {
+						if _, exists := resourceFields[field]; exists {
+							t.Logf("✅ Resource has field: %s", field)
+						} else {
+							t.Errorf("Missing resource field: %s", field)
+						}
+					}
+				}
+			}
+		}
+	}
+	
+	// Validate resourcesByKind structure
+	if resourcesByKind, exists := fields["resourcesByKind"]; exists {
+		if kindMap := resourcesByKind.GetStructValue(); kindMap != nil {
+			kindFields := kindMap.GetFields()
+			t.Logf("✅ Found resourcesByKind with %d kinds", len(kindFields))
+			for kind := range kindFields {
+				t.Logf("  - Kind: %s", kind)
+			}
+		}
+	}
+	
+	t.Logf("✅ NEW schema registry format validation completed successfully for %s", testName)
 }
 
 // createGitHubProjectCRD creates a mock GitHubProject CRD for testing

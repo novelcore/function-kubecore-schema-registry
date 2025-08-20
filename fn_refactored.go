@@ -264,10 +264,29 @@ func (f *RefactoredFunction) RunFunction(ctx context.Context, req *fnv1.RunFunct
 		response.SetContextKey(rsp, "kubecore.schemaRegistry.detailedStatus", statusValue)
 	}
 
-	// Also store just the new format for easier Go template access
-	if schemaResultsJSON, err := json.Marshal(schemaRegistryOutput); err == nil {
-		if schemaResultsValue, err := structpb.NewValue(string(schemaResultsJSON)); err == nil {
-			response.SetContextKey(rsp, "schemaRegistryResults", schemaResultsValue)
+	// Convert to basic types that structpb can handle
+	schemaRegistryJSON, err := json.Marshal(schemaRegistryOutput)
+	if err != nil {
+		f.logger.Error("Failed to marshal schema registry output", 
+			"correlationId", correlationID,
+			"error", err)
+	} else {
+		var schemaRegistryMap map[string]interface{}
+		if err := json.Unmarshal(schemaRegistryJSON, &schemaRegistryMap); err != nil {
+			f.logger.Error("Failed to unmarshal to interface map",
+				"correlationId", correlationID,
+				"error", err)
+		} else {
+			// Store the structured data for Go template access
+			if schemaRegistryStruct, err := structpb.NewStruct(schemaRegistryMap); err == nil {
+				response.SetContextKey(rsp, "schemaRegistryResults", structpb.NewStructValue(schemaRegistryStruct))
+				f.logger.Info("Successfully set structured schemaRegistryResults context key",
+					"correlationId", correlationID)
+			} else {
+				f.logger.Error("Failed to create structured schemaRegistryResults",
+					"correlationId", correlationID,
+					"error", err)
+			}
 		}
 	}
 

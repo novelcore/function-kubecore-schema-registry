@@ -1,0 +1,226 @@
+{
+  "functionResponse": {
+    "context": {
+      "schemaRegistryResults": {
+        "description": "Go template-friendly schema registry output with structured data",
+        "type": "object",
+        "properties": {
+          "discoveredResources": {
+            "description": "Flat list of all discovered resources for easy iteration",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "Name of the discovered resource",
+                  "example": "demo-project"
+                },
+                "kind": {
+                  "type": "string",
+                  "description": "Kubernetes kind of the resource",
+                  "example": "GitHubProject"
+                },
+                "apiVersion": {
+                  "type": "string",
+                  "description": "API version of the resource",
+                  "example": "github.platform.kubecore.io/v1alpha1"
+                },
+                "namespace": {
+                  "type": "string",
+                  "description": "Namespace of the resource (empty for cluster-scoped)",
+                  "example": "test"
+                },
+                "referencedBy": {
+                  "type": "string",
+                  "description": "Field name that references this resource",
+                  "example": "githubProjectRef"
+                },
+                "depth": {
+                  "type": "integer",
+                  "description": "Discovery depth (0 for direct references, >0 for transitive)",
+                  "example": 0
+                },
+                "source": {
+                  "type": "string",
+                  "description": "How the resource was discovered",
+                  "enum": ["direct", "transitive"],
+                  "example": "direct"
+                },
+                "parentResource": {
+                  "type": "string",
+                  "description": "Name of parent resource (for transitive discoveries)",
+                  "example": "demo-project"
+                }
+              },
+              "required": ["name", "kind", "apiVersion", "referencedBy", "depth", "source"]
+            }
+          },
+          "resourceSchemas": {
+            "description": "Simplified schema information by resource Kind",
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "apiVersion": {
+                  "type": "string",
+                  "description": "API version for this resource Kind",
+                  "example": "github.platform.kubecore.io/v1alpha1"
+                },
+                "referenceFields": {
+                  "type": "array",
+                  "description": "Fields that reference other resources",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "description": "Name of the reference field",
+                        "example": "githubProviderRef"
+                      },
+                      "targetKind": {
+                        "type": "string",
+                        "description": "Kind of resource this field references",
+                        "example": "GithubProvider"
+                      },
+                      "required": {
+                        "type": "boolean",
+                        "description": "Whether this reference field is required",
+                        "example": true
+                      }
+                    },
+                    "required": ["name", "targetKind", "required"]
+                  }
+                },
+                "requiredFields": {
+                  "type": "array",
+                  "description": "List of required fields for this resource",
+                  "items": {
+                    "type": "string"
+                  },
+                  "example": ["spec", "metadata"]
+                }
+              },
+              "required": ["apiVersion", "requiredFields"]
+            }
+          },
+          "referenceChains": {
+            "description": "Chains showing resource reference relationships",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "description": "String representation of the reference chain",
+                  "example": "githubProjectRef -> githubProviderRef -> kubernetesProviderConfigRef"
+                },
+                "resources": {
+                  "type": "array",
+                  "description": "Array of resource names in the chain",
+                  "items": {
+                    "type": "string"
+                  },
+                  "example": ["demo-project", "gh-default", "kubesys-enhanced"]
+                },
+                "kinds": {
+                  "type": "array",
+                  "description": "Array of resource Kinds in the chain",
+                  "items": {
+                    "type": "string"
+                  },
+                  "example": ["GitHubProject", "GithubProvider", "ProviderConfig"]
+                }
+              },
+              "required": ["path", "resources", "kinds"]
+            }
+          },
+          "resourcesByKind": {
+            "description": "Resources grouped by Kind for direct access",
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "description": "Array of resources of this Kind",
+              "items": {
+                "$ref": "#/functionResponse/context/schemaRegistryResults/properties/discoveredResources/items"
+              }
+            },
+            "example": {
+              "GitHubProject": [
+                {
+                  "name": "demo-project",
+                  "kind": "GitHubProject",
+                  "apiVersion": "github.platform.kubecore.io/v1alpha1",
+                  "namespace": "test",
+                  "referencedBy": "githubProjectRef",
+                  "depth": 0,
+                  "source": "direct"
+                }
+              ],
+              "GithubProvider": [
+                {
+                  "name": "gh-default",
+                  "kind": "GithubProvider",
+                  "apiVersion": "github.platform.kubecore.io/v1alpha1",
+                  "namespace": "",
+                  "referencedBy": "githubProviderRef",
+                  "depth": 1,
+                  "source": "transitive",
+                  "parentResource": "demo-project"
+                }
+              ]
+            }
+          },
+          "discoveryStats": {
+            "description": "Statistics about the discovery process",
+            "type": "object",
+            "properties": {
+              "totalResourcesFound": {
+                "type": "integer",
+                "description": "Total number of resources discovered",
+                "example": 3
+              },
+              "totalSchemasRetrieved": {
+                "type": "integer",
+                "description": "Total number of schemas retrieved",
+                "example": 3
+              },
+              "maxDepthReached": {
+                "type": "integer",
+                "description": "Maximum discovery depth reached",
+                "example": 2
+              },
+              "executionTimeMs": {
+                "type": "integer",
+                "description": "Execution time in milliseconds",
+                "example": 0
+              }
+            },
+            "required": ["totalResourcesFound", "totalSchemasRetrieved", "maxDepthReached", "executionTimeMs"]
+          }
+        },
+        "required": ["discoveredResources", "resourceSchemas", "referenceChains", "resourcesByKind", "discoveryStats"]
+      },
+      "kubecore.schemaRegistry.detailedStatus": {
+        "description": "Legacy format with full context data (JSON string)",
+        "type": "string",
+        "contentMediaType": "application/json",
+        "example": "{\"executionContext\":{\"sourceXResource\":\"test-resource\",\"claimName\":\"test-claim\",\"directReferences\":{\"githubProjectRef\":{\"name\":\"demo-project\",\"kind\":\"GitHubProject\"}}},\"referencedResourceSchemas\":{...},\"discoveryStats\":{...}}"
+      }
+    }
+  },
+  "templateUsageExamples": {
+    "iterateResources": "{{ range .context.schemaRegistryResults.discoveredResources }}\n  Resource: {{ .name }} ({{ .kind }})\n{{ end }}",
+    "accessByKind": "{{ $projects := index .context.schemaRegistryResults.resourcesByKind \"GitHubProject\" }}\n{{ range $projects }}\n  Project: {{ .name }}\n{{ end }}",
+    "conditionalLogic": "{{ if index .context.schemaRegistryResults.resourcesByKind \"GithubProvider\" }}\n  GitHub provider found!\n{{ end }}",
+    "referenceChains": "{{ range .context.schemaRegistryResults.referenceChains }}\n  Chain: {{ .path }}\n{{ end }}",
+    "discoveryStats": "Found {{ .context.schemaRegistryResults.discoveryStats.totalResourcesFound }} resources in {{ .context.schemaRegistryResults.discoveryStats.executionTimeMs }}ms"
+  },
+  "benefits": {
+    "templateFriendly": "Easy iteration and access patterns for Go templates",
+    "structured": "No need to parse complex JSON structures",
+    "performant": "Direct field access instead of nested lookups",
+    "typed": "Clear data types and structure validation",
+    "backwardCompatible": "Legacy format still available for existing integrations"
+  }
+}
