@@ -46,74 +46,75 @@ spec:
                 type: object
               discoveryStats:
                 type: object
----
-apiVersion: apiextensions.crossplane.io/v1
-kind: Composition
-metadata:
-  name: schema-registry
-  labels:
-    provider: kubecore
-    component: schema-registry
-spec:
-  compositeTypeRef:
-    apiVersion: platform.kubecore.io/v1alpha1
-    kind: XSchemaRegistry
-  mode: Pipeline
-  pipeline:
-  - step: context-extraction
-    functionRef:
-      name: function-kubecore-schema-registry
-    input:
-      apiVersion: fn.crossplane.io/v1beta1
-      kind: Input
-      enableTransitiveDiscovery: true
-      traversalDepth: 3
-      includeFullSchema: true
 
-  - step: create-configmap
-    functionRef:
-      name: function-go-templating
-    input:
-      apiVersion: gotemplating.fn.crossplane.io/v1beta1
-      kind: GoTemplate
-      source: Inline
-      inline:
-        template: |+
-          {{ $ctx := .observed.composite.resource }}
-          {{ $schemaData := index .context "kubecore.schemaRegistry.detailedStatus" }}
-          ---
-          apiVersion: kubernetes.crossplane.io/v1alpha1
-          kind: Object
-          metadata:
-            name: {{ $ctx.metadata.name }}-context
-            annotations:
-              crossplane.io/external-name: {{ $ctx.metadata.name }}-context
-              gotemplating.fn.crossplane.io/composition-resource-name: {{ $ctx.metadata.name }}-context
-          spec:
-            forProvider:
-              manifest:
-                apiVersion: v1
-                kind: ConfigMap
-                metadata:
-                  name: {{ $ctx.metadata.name }}-context
-                  namespace: {{ $ctx.spec.githubProjectRef.namespace | default "default" }}
-                data:
-                  resourceType: "{{ $ctx.kind }}"
-                  resourceName: "{{ $ctx.metadata.name }}"
-                  githubProjectRef: "{{ $ctx.spec.githubProjectRef.name }}"
-                  transitiveDiscovery: "{{ $ctx.spec.enableTransitiveDiscovery }}"
-                  {{ if $schemaData }}
-                  schemaRegistryResults: {{ $schemaData | quote }}
-                  {{ else }}
-                  schemaRegistryResults: "No schema data available"
-                  {{ end }}
-            providerConfigRef:
-              name: kubesys-enhanced
-              
-  # Auto-Ready Function (Aggregate child resource readiness)
-  - step: auto-ready
-    functionRef:
-      name: function-auto-ready
-    input:
-      apiVersion: autoready.fn.crossplane.io/v1beta1
-      kind: Input
+# ---
+# apiVersion: apiextensions.crossplane.io/v1
+# kind: Composition
+# metadata:
+#   name: schema-registry
+#   labels:
+#     provider: kubecore
+#     component: schema-registry
+# spec:
+#   compositeTypeRef:
+#     apiVersion: platform.kubecore.io/v1alpha1
+#     kind: XSchemaRegistry
+#   mode: Pipeline
+#   pipeline:
+#   - step: context-extraction
+#     functionRef:
+#       name: function-kubecore-schema-registry
+#     input:
+#       apiVersion: fn.crossplane.io/v1beta1
+#       kind: Input
+#       enableTransitiveDiscovery: true
+#       traversalDepth: 3
+#       includeFullSchema: true
+
+#   - step: create-configmap
+#     functionRef:
+#       name: function-go-templating
+#     input:
+#       apiVersion: gotemplating.fn.crossplane.io/v1beta1
+#       kind: GoTemplate
+#       source: Inline
+#       inline:
+#         template: |+
+#           {{ $ctx := .observed.composite.resource }}
+#           {{ $schemaData := index .context "kubecore.schemaRegistry.detailedStatus" }}
+#           ---
+#           apiVersion: kubernetes.crossplane.io/v1alpha1
+#           kind: Object
+#           metadata:
+#             name: {{ $ctx.metadata.name }}-context
+#             annotations:
+#               crossplane.io/external-name: {{ $ctx.metadata.name }}-context
+#               gotemplating.fn.crossplane.io/composition-resource-name: {{ $ctx.metadata.name }}-context
+#           spec:
+#             forProvider:
+#               manifest:
+#                 apiVersion: v1
+#                 kind: ConfigMap
+#                 metadata:
+#                   name: {{ $ctx.metadata.name }}-context
+#                   namespace: {{ $ctx.spec.githubProjectRef.namespace | default "default" }}
+#                 data:
+#                   resourceType: "{{ $ctx.kind }}"
+#                   resourceName: "{{ $ctx.metadata.name }}"
+#                   githubProjectRef: "{{ $ctx.spec.githubProjectRef.name }}"
+#                   transitiveDiscovery: "{{ $ctx.spec.enableTransitiveDiscovery }}"
+#                   {{ if $schemaData }}
+#                   schemaRegistryResults: {{ $schemaData | quote }}
+#                   {{ else }}
+#                   schemaRegistryResults: "No schema data available"
+#                   {{ end }}
+#             providerConfigRef:
+#               name: kubesys-enhanced
+
+#   # Auto-Ready Function (Aggregate child resource readiness)
+#   - step: auto-ready
+#     functionRef:
+#       name: function-auto-ready
+#     input:
+#       apiVersion: autoready.fn.crossplane.io/v1beta1
+#       kind: Input

@@ -37,13 +37,16 @@ type ExecutionContext struct {
 
 // DiscoveryStats holds metrics about the discovery process
 type DiscoveryStats struct {
-	TotalReferencesFound int   `json:"totalReferencesFound"`
-	MaxDepthReached      int   `json:"maxDepthReached"`
-	SchemasRetrieved     int   `json:"schemasRetrieved"`
-	RealSchemasFound     int   `json:"realSchemasFound"`
-	CacheHits            int   `json:"cacheHits"`
-	APICallsMade         int   `json:"apiCalls"`
-	ExecutionTimeMs      int64 `json:"executionTimeMs"`
+	TotalResourcesFound   int   `json:"totalResourcesFound"`
+	TotalSchemasRetrieved int   `json:"totalSchemasRetrieved"`
+	MaxDepthReached       int   `json:"maxDepthReached"`
+	ExecutionTimeMs       int64 `json:"executionTimeMs"`
+	// Legacy fields for backward compatibility
+	TotalReferencesFound int   `json:"totalReferencesFound,omitempty"`
+	SchemasRetrieved     int   `json:"schemasRetrieved,omitempty"`
+	RealSchemasFound     int   `json:"realSchemasFound,omitempty"`
+	CacheHits            int   `json:"cacheHits,omitempty"`
+	APICallsMade         int   `json:"apiCalls,omitempty"`
 }
 
 // DiscoveryOptions holds options for schema discovery
@@ -54,11 +57,55 @@ type DiscoveryOptions struct {
 	CorrelationID      string
 }
 
+// DiscoveredResource represents a resource discovered during schema discovery
+type DiscoveredResource struct {
+	Name           string `json:"name"`
+	Kind           string `json:"kind"`
+	APIVersion     string `json:"apiVersion"`
+	Namespace      string `json:"namespace,omitempty"`
+	ReferencedBy   string `json:"referencedBy"`
+	Depth          int    `json:"depth"`
+	Source         string `json:"source"` // "direct" | "transitive"
+	ParentResource string `json:"parentResource,omitempty"`
+}
+
+// SimplifiedSchema represents schema information in a Go template-friendly format
+type SimplifiedSchema struct {
+	APIVersion      string            `json:"apiVersion"`
+	ReferenceFields []ReferenceField  `json:"referenceFields"`
+	RequiredFields  []string          `json:"requiredFields"`
+}
+
+// ReferenceField represents a field that references another resource
+type ReferenceField struct {
+	Name       string `json:"name"`
+	TargetKind string `json:"targetKind"`
+	Required   bool   `json:"required"`
+}
+
+// ReferenceChain represents a chain of resource references
+type ReferenceChain struct {
+	Path      string   `json:"path"`
+	Resources []string `json:"resources"`
+	Kinds     []string `json:"kinds"`
+}
+
+// SchemaRegistryOutput represents the new Go template-friendly output structure
+type SchemaRegistryOutput struct {
+	DiscoveredResources []DiscoveredResource             `json:"discoveredResources"`
+	ResourceSchemas     map[string]SimplifiedSchema      `json:"resourceSchemas"`
+	ReferenceChains     []ReferenceChain                 `json:"referenceChains"`
+	ResourcesByKind     map[string][]DiscoveredResource  `json:"resourcesByKind"`
+	DiscoveryStats      DiscoveryStats                   `json:"discoveryStats"`
+}
+
 // DiscoveryResult holds the result of a schema discovery operation
 type DiscoveryResult struct {
-	Schemas map[string]*SchemaInfo `json:"schemas"`
-	Stats   *DiscoveryStats        `json:"stats"`
-	Error   error                  `json:"error,omitempty"`
+	Schemas           map[string]*SchemaInfo `json:"schemas"`
+	Stats             *DiscoveryStats        `json:"stats"`
+	Error             error                  `json:"error,omitempty"`
+	// New field for simplified output
+	SchemaRegistryOutput *SchemaRegistryOutput `json:"schemaRegistryOutput,omitempty"`
 }
 
 // CachedSchema represents a cached schema with timestamp

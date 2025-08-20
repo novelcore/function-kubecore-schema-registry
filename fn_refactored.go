@@ -42,6 +42,7 @@ type RefactoredFunction struct {
 	refExtractor     interfaces.ReferenceExtractor
 	contextExtractor interfaces.ContextExtractor
 	discoveryService interfaces.SchemaDiscoveryService
+	converterService *service.ConverterService
 
 	// Kubernetes client for repository
 	k8sClient clientset.Interface
@@ -88,6 +89,9 @@ func NewRefactoredFunction(log logging.Logger) *RefactoredFunction {
 		logger,
 	)
 
+	// Initialize converter service
+	converterService := service.NewConverterService(logger)
+
 	return &RefactoredFunction{
 		log:              log,
 		config:           cfg,
@@ -98,6 +102,7 @@ func NewRefactoredFunction(log logging.Logger) *RefactoredFunction {
 		refExtractor:     refExtractor,
 		contextExtractor: contextExtractor,
 		discoveryService: discoveryService,
+		converterService: converterService,
 		k8sClient:        k8sClient,
 	}
 }
@@ -115,6 +120,8 @@ func (f *RefactoredFunction) SetKubernetesClient(client clientset.Interface) {
 			f.refExtractor,
 			f.logger,
 		)
+		// Recreate converter service
+		f.converterService = service.NewConverterService(f.logger)
 	}
 }
 
@@ -214,7 +221,20 @@ func (f *RefactoredFunction) RunFunction(ctx context.Context, req *fnv1.RunFunct
 		"schemasRetrieved", discoveryResult.Stats.SchemasRetrieved,
 		"executionTimeMs", discoveryResult.Stats.ExecutionTimeMs)
 
-	// Build response structure
+	// Convert to Go template-friendly format
+	schemaRegistryOutput, err := f.converterService.ConvertToSchemaRegistryOutput(discoveryResult, execCtx, correlationID)
+	if err != nil {
+		f.logger.Error("Failed to convert to schema registry output",
+			"correlationId", correlationID,
+			"error", err)
+		response.Fatal(rsp, errors.Wrap(err, "schema registry conversion failed"))
+		return rsp, nil
+	}
+
+	// Store the converted result in the discovery result
+	discoveryResult.SchemaRegistryOutput = schemaRegistryOutput
+
+	// Build response structure with both legacy and new formats
 	responseData := map[string]interface{}{
 		"status": map[string]interface{}{
 			"conditions": []map[string]interface{}{
@@ -224,26 +244,39 @@ func (f *RefactoredFunction) RunFunction(ctx context.Context, req *fnv1.RunFunct
 				},
 			},
 			"executionContext":           execCtx,
+			// Legacy format for backward compatibility
 			"referencedResourceSchemas": discoveryResult.Schemas,
 			"discoveryStats":            discoveryResult.Stats,
+			// New Go template-friendly format
+			"schemaRegistryResults":     schemaRegistryOutput,
 		},
 	}
 
-	// Store the status in context for potential access by other functions
+	// Store both formats in context for potential access by other functions
 	statusJSON, _ := json.Marshal(map[string]interface{}{
 		"executionContext":           execCtx,
 		"referencedResourceSchemas": discoveryResult.Schemas,
 		"discoveryStats":            discoveryResult.Stats,
+		"schemaRegistryResults":     schemaRegistryOutput,
 	})
 
 	if statusValue, err := structpb.NewValue(string(statusJSON)); err == nil {
 		response.SetContextKey(rsp, "kubecore.schemaRegistry.detailedStatus", statusValue)
 	}
 
+	// Also store just the new format for easier Go template access
+	if schemaResultsJSON, err := json.Marshal(schemaRegistryOutput); err == nil {
+		if schemaResultsValue, err := structpb.NewValue(string(schemaResultsJSON)); err == nil {
+			response.SetContextKey(rsp, "schemaRegistryResults", schemaResultsValue)
+		}
+	}
+
 	f.logger.Info("Schema registry discovery results available",
 		"correlationId", correlationID,
-		"schemasCount", len(discoveryResult.Schemas),
-		"referencesCount", discoveryResult.Stats.TotalReferencesFound,
+		"discoveredResourcesCount", len(schemaRegistryOutput.DiscoveredResources),
+		"resourceSchemasCount", len(schemaRegistryOutput.ResourceSchemas),
+		"referenceChainsCount", len(schemaRegistryOutput.ReferenceChains),
+		"resourceKindsCount", len(schemaRegistryOutput.ResourcesByKind),
 		"statusSize", len(statusJSON))
 
 	// Convert response data to JSON for logging
@@ -252,19 +285,24 @@ func (f *RefactoredFunction) RunFunction(ctx context.Context, req *fnv1.RunFunct
 			"correlationId", correlationID,
 			"responseSize", len(responseJSON))
 
-		response.Normalf(rsp, "Schema registry discovery completed successfully. Found %d schemas in %dms",
-			discoveryResult.Stats.SchemasRetrieved, discoveryResult.Stats.ExecutionTimeMs)
+		response.Normalf(rsp, "Schema registry discovery completed successfully. Found %d resources across %d schemas in %dms",
+			schemaRegistryOutput.DiscoveryStats.TotalResourcesFound, 
+			schemaRegistryOutput.DiscoveryStats.TotalSchemasRetrieved,
+			schemaRegistryOutput.DiscoveryStats.ExecutionTimeMs)
 	}
 
 	// Set success condition
 	response.ConditionTrue(rsp, "FunctionSuccess", "SchemaDiscoveryComplete").
-		WithMessage(fmt.Sprintf("Successfully discovered %d schemas with %d references",
-			discoveryResult.Stats.SchemasRetrieved, discoveryResult.Stats.TotalReferencesFound)).
+		WithMessage(fmt.Sprintf("Successfully discovered %d resources across %d schemas with %d reference chains",
+			schemaRegistryOutput.DiscoveryStats.TotalResourcesFound,
+			schemaRegistryOutput.DiscoveryStats.TotalSchemasRetrieved,
+			len(schemaRegistryOutput.ReferenceChains))).
 		TargetCompositeAndClaim()
 
 	f.logger.Info("RunFunction completed successfully",
 		"correlationId", correlationID,
-		"executionTimeMs", discoveryResult.Stats.ExecutionTimeMs)
+		"executionTimeMs", schemaRegistryOutput.DiscoveryStats.ExecutionTimeMs,
+		"schemaRegistryOutputGenerated", true)
 
 	return rsp, nil
 }
