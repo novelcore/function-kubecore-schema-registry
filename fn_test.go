@@ -323,7 +323,8 @@ func TestEmbeddedRegistry(t *testing.T) {
 		{"v1", "Service", true, true},
 		{"v1", "ConfigMap", true, true},
 		{"apps/v1", "Deployment", true, true},
-		{"github.platform.kubecore.io/v1alpha1", "GitHubProject", true, false},
+		{"github.platform.kubecore.io/v1alpha1", "GitHubProject", true, true},
+		{"github.platform.kubecore.io/v1alpha1", "GithubProvider", true, true},
 		{"platform.kubecore.io/v1alpha1", "KubEnv", true, true},
 		{"nonexistent/v1", "NonExistent", false, false},
 	}

@@ -123,8 +123,10 @@ func (b *DefaultBuilder) SetContext(rsp *fnv1.RunFunctionResponse, fetchResult *
 		return errors.Wrap(err, "failed to unmarshal context from JSON")
 	}
 
-	// Set the main context
+	// Set the main context with expected key for templates
 	if contextStruct, err := structpb.NewStruct(contextMap); err == nil {
+		response.SetContextKey(rsp, "kubecore-schema-registry.fn.kubecore.platform.io/fetched-resources", structpb.NewStructValue(contextStruct))
+		// Also set legacy key for backward compatibility
 		response.SetContextKey(rsp, "schemaRegistryResults", structpb.NewStructValue(contextStruct))
 	} else {
 		return errors.Wrap(err, "failed to create structured context")

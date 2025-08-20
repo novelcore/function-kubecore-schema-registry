@@ -1,0 +1,17 @@
+# test-claim-simple.yaml
+apiVersion: test.kubecore.platform.io/v1alpha1
+kind: SchemaRegistryTest
+metadata:
+  name: phase1-simple-test
+  namespace: default
+spec:
+  testName: phase1-github
+  resources:
+  - apiVersion: github.platform.kubecore.io/v1alpha1
+    kind: GitHubProject
+    name: demo-project
+    namespace: test
+  # - apiVersion: github.platform.kubecore.io/v1alpha1
+  #   kind: GithubProvider
+  #   name: gh-default
+  #   namespace: default

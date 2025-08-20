@@ -1,0 +1,276 @@
+# test-composition.yaml
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: xschemaregistrytest.test.kubecore.platform.io
+spec:
+  compositeTypeRef:
+    apiVersion: test.kubecore.platform.io/v1alpha1
+    kind: XSchemaRegistryTest
+
+  mode: Pipeline
+
+  pipeline:
+  # Step 1: Call the Schema Registry Function with actual input schema
+  - step: fetch-resources
+    functionRef:
+      name: function-kubecore-schema-registry
+    input:
+      apiVersion: registry.fn.crossplane.io/v1beta1
+      kind: Input
+      fetchTimeout: "10s"
+      maxConcurrentFetches: 5
+      fetchResources:
+      # Fetch GitHubProject
+      - into: githubProject
+        name: demo-project
+        namespace: test
+        apiVersion: github.platform.kubecore.io/v1alpha1
+        kind: GitHubProject
+        optional: false
+
+      # Fetch GithubProvider
+      - into: githubProvider
+        name: gh-default
+        namespace: default
+        apiVersion: github.platform.kubecore.io/v1alpha1
+        kind: GithubProvider
+        optional: false
+
+  # Step 2: Process fetched resources and create ConfigMaps
+  - step: generate-configmaps
+    functionRef:
+      name: function-go-templating
+    input:
+      apiVersion: gotemplating.fn.crossplane.io/v1beta1
+      kind: GoTemplate
+      source: Inline
+      inline:
+        template: |
+          {{- $resources := index .context "kubecore-schema-registry.fn.kubecore.platform.io/fetched-resources" }}
+          {{- $testName := .observed.composite.resource.spec.testName }}
+          {{- $namespace := .observed.composite.resource.metadata.namespace | default "default" }}
+
+          {{- /* Summary ConfigMap with fetch results */}}
+          ---
+          apiVersion: kubernetes.crossplane.io/v1alpha2
+          kind: Object
+          metadata:
+            name: {{ $testName }}-summary
+            annotations:
+              crossplane.io/external-name: {{ $testName }}-summary
+          spec:
+            forProvider:
+              manifest:
+                apiVersion: v1
+                kind: ConfigMap
+                metadata:
+                  name: {{ $testName }}-summary
+                  namespace: {{ $namespace }}
+                  labels:
+                    kubecore.io/test-name: {{ $testName }}
+                    kubecore.io/test-type: phase1-validation
+                  annotations:
+                    kubecore.io/fetched-at: {{ now | date "2006-01-02T15:04:05Z07:00" }}
+                data:
+                  test-name: {{ $testName }}
+                  total-resource-types: "{{ len $resources }}"
+                  {{- if index $resources "githubProject" }}
+                  github-project-count: "{{ len (index $resources "githubProject") }}"
+                  {{- else }}
+                  github-project-count: "0"
+                  {{- end }}
+                  {{- if index $resources "githubProvider" }}
+                  github-provider-count: "{{ len (index $resources "githubProvider") }}"
+                  {{- else }}
+                  github-provider-count: "0"
+                  {{- end }}
+            providerConfigRef:
+              name: kubesys-enhanced
+
+          {{- /* GitHubProject Details ConfigMap */}}
+          {{- if index $resources "githubProject" }}
+          {{- range $i, $project := index $resources "githubProject" }}
+          ---
+          apiVersion: kubernetes.crossplane.io/v1alpha2
+          kind: Object
+          metadata:
+            name: {{ $testName }}-githubproject-{{ $i }}
+            annotations:
+              crossplane.io/external-name: {{ $testName }}-githubproject-{{ $project.metadata.name }}
+          spec:
+            forProvider:
+              manifest:
+                apiVersion: v1
+                kind: ConfigMap
+                metadata:
+                  name: {{ $testName }}-githubproject-{{ $project.metadata.name }}
+                  namespace: {{ $namespace }}
+                  labels:
+                    kubecore.io/test-name: {{ $testName }}
+                    kubecore.io/resource-type: githubproject
+                    kubecore.io/resource-name: {{ $project.metadata.name }}
+                  annotations:
+                    kubecore.io/fetched-at: {{ index $project "_kubecore" "fetchedAt" | default (now | date "2006-01-02T15:04:05Z07:00") }}
+                    kubecore.io/matched-by: {{ index $project "_kubecore" "matchedBy" | default "direct" }}
+                data:
+                  name: {{ $project.metadata.name }}
+                  namespace: {{ $project.metadata.namespace | default "none" }}
+                  uid: {{ $project.metadata.uid | default "not-available" }}
+                  {{- if $project.spec }}
+                  description: {{ $project.spec.description | quote }}
+                  visibility: {{ $project.spec.visibility | default "private" }}
+                  {{- if $project.spec.githubProviderRef }}
+                  github-provider-ref-name: {{ $project.spec.githubProviderRef.name }}
+                  {{- end }}
+                  {{- if $project.spec.repositorySource }}
+                  repository-source-type: {{ $project.spec.repositorySource.type }}
+                  {{- if $project.spec.repositorySource.template }}
+                  template-owner: {{ $project.spec.repositorySource.template.owner }}
+                  template-repository: {{ $project.spec.repositorySource.template.repository }}
+                  {{- end }}
+                  {{- end }}
+                  {{- end }}
+                  {{- if $project.status }}
+                  {{- if $project.status.conditions }}
+                  status-ready: "{{ range $project.status.conditions }}{{ if eq .type "Ready" }}{{ .status }}{{ end }}{{ end }}"
+                  {{- end }}
+                  {{- if $project.status.repositoryUrl }}
+                  repository-url: {{ $project.status.repositoryUrl }}
+                  {{- end }}
+                  {{- end }}
+            providerConfigRef:
+              name: kubesys-enhanced
+          {{- end }}
+          {{- end }}
+
+          {{- /* GithubProvider Details ConfigMap */}}
+          {{- if index $resources "githubProvider" }}
+          {{- range $i, $provider := index $resources "githubProvider" }}
+          ---
+          apiVersion: kubernetes.crossplane.io/v1alpha2
+          kind: Object
+          metadata:
+            name: {{ $testName }}-githubprovider-{{ $i }}
+            annotations:
+              crossplane.io/external-name: {{ $testName }}-githubprovider-{{ $provider.metadata.name }}
+          spec:
+            forProvider:
+              manifest:
+                apiVersion: v1
+                kind: ConfigMap
+                metadata:
+                  name: {{ $testName }}-githubprovider-{{ $provider.metadata.name }}
+                  namespace: {{ $namespace }}
+                  labels:
+                    kubecore.io/test-name: {{ $testName }}
+                    kubecore.io/resource-type: githubprovider
+                    kubecore.io/resource-name: {{ $provider.metadata.name }}
+                  annotations:
+                    kubecore.io/fetched-at: {{ index $provider "_kubecore" "fetchedAt" | default (now | date "2006-01-02T15:04:05Z07:00") }}
+                    kubecore.io/matched-by: {{ index $provider "_kubecore" "matchedBy" | default "direct" }}
+                data:
+                  name: {{ $provider.metadata.name }}
+                  namespace: {{ $provider.metadata.namespace | default "cluster-scoped" }}
+                  uid: {{ $provider.metadata.uid | default "not-available" }}
+                  {{- if $provider.spec }}
+                  {{- if $provider.spec.secretStoreRef }}
+                  secret-store-kind: {{ $provider.spec.secretStoreRef.kind | default "ClusterSecretStore" }}
+                  secret-store-name: {{ $provider.spec.secretStoreRef.name }}
+                  {{- end }}
+                  {{- if $provider.spec.aws }}
+                  aws-secret-id: {{ $provider.spec.aws.secretId }}
+                  {{- end }}
+                  {{- if $provider.spec.secret }}
+                  secret-name: {{ $provider.spec.secret.name }}
+                  secret-namespace: {{ $provider.spec.secret.namespace | default "crossplane-system" }}
+                  {{- end }}
+                  {{- if $provider.spec.github }}
+                  github-organization: {{ $provider.spec.github.organization }}
+                  github-is-enterprise: "{{ $provider.spec.github.isEnterprise | default false }}"
+                  {{- if $provider.spec.github.baseURL }}
+                  github-base-url: {{ $provider.spec.github.baseURL }}
+                  {{- end }}
+                  {{- end }}
+                  refresh-interval: {{ $provider.spec.refreshInterval | default "1m" }}
+                  {{- if $provider.spec.kubernetesProviderConfigRef }}
+                  kubesys-enhanced-config: {{ $provider.spec.kubernetesProviderConfigRef }}
+                  {{- end }}
+                  {{- end }}
+            providerConfigRef:
+              name: kubesys-enhanced
+          {{- end }}
+          {{- end }}
+
+          {{- /* Relationships Discovery ConfigMap */}}
+          ---
+          apiVersion: kubernetes.crossplane.io/v1alpha2
+          kind: Object
+          metadata:
+            name: {{ $testName }}-relationships
+            annotations:
+              crossplane.io/external-name: {{ $testName }}-relationships
+          spec:
+            forProvider:
+              manifest:
+                apiVersion: v1
+                kind: ConfigMap
+                metadata:
+                  name: {{ $testName }}-relationships
+                  namespace: {{ $namespace }}
+                  labels:
+                    kubecore.io/test-name: {{ $testName }}
+                    kubecore.io/test-type: relationships
+                  annotations:
+                    kubecore.io/generated-at: {{ now | date "2006-01-02T15:04:05Z07:00" }}
+                data:
+                  {{- if and (index $resources "githubProject") (index $resources "githubProvider") }}
+                  {{- range $project := index $resources "githubProject" }}
+                  {{- if $project.spec.githubProviderRef }}
+                  project-{{ $project.metadata.name }}-provider: {{ $project.spec.githubProviderRef.name }}
+                  {{- end }}
+                  {{- end }}
+                  {{- end }}
+                  relationship-count: "{{ if index $resources "githubProject" }}{{ len (index $resources "githubProject") }}{{ else }}0{{ end }}"
+            providerConfigRef:
+              name: kubesys-enhanced
+
+          {{- /* Debug Output ConfigMap */}}
+          ---
+          apiVersion: kubernetes.crossplane.io/v1alpha2
+          kind: Object
+          metadata:
+            name: {{ $testName }}-debug
+            annotations:
+              crossplane.io/external-name: {{ $testName }}-debug
+          spec:
+            forProvider:
+              manifest:
+                apiVersion: v1
+                kind: ConfigMap
+                metadata:
+                  name: {{ $testName }}-debug
+                  namespace: {{ $namespace }}
+                  labels:
+                    kubecore.io/test-name: {{ $testName }}
+                    kubecore.io/test-type: debug
+                  annotations:
+                    kubecore.io/generated-at: {{ now | date "2006-01-02T15:04:05Z07:00" }}
+                data:
+                  context-keys: |
+                    {{- range $key, $_ := .context }}
+                    - {{ $key }}
+                    {{- end }}
+                  resource-types-fetched: |
+                    {{- range $key, $_ := $resources }}
+                    - {{ $key }}
+                    {{- end }}
+                  raw-output-sample: |
+                    {{- if index $resources "githubProject" }}
+                    {{- $sample := index (index $resources "githubProject") 0 }}
+                    {{ $sample | toYaml | nindent 20 }}
+                    {{- else }}
+                    No GitHubProject found
+                    {{- end }}
+            providerConfigRef:
+              name: kubesys-enhanced

@@ -379,7 +379,7 @@ func (r *EmbeddedRegistry) loadGitHubPlatformTypes() {
 	r.RegisterType(&ResourceType{
 		APIVersion: "github.platform.kubecore.io/v1alpha1",
 		Kind:       "GitHubProject",
-		Namespaced: false,
+		Namespaced: true,
 		Group:      "github.platform.kubecore.io",
 		Version:    "v1alpha1",
 		Plural:     "githubprojects",
@@ -392,6 +392,72 @@ func (r *EmbeddedRegistry) loadGitHubPlatformTypes() {
 						Type: "string",
 					},
 					"description": {
+						Type: "string",
+					},
+					"visibility": {
+						Type: "string",
+					},
+					"githubProviderRef": {
+						Type: "object",
+						Properties: map[string]FieldSchema{
+							"name": {
+								Type: "string",
+								References: []ResourceReference{
+									{
+										FieldPath:   "$.spec.githubProviderRef.name",
+										TargetKind:  "GithubProvider",
+										TargetGroup: "github.platform.kubecore.io",
+										RefType:     RefTypeCustom,
+									},
+								},
+							},
+						},
+					},
+					"repositorySource": {
+						Type: "object",
+						Properties: map[string]FieldSchema{
+							"type": {
+								Type: "string",
+							},
+							"template": {
+								Type: "object",
+								Properties: map[string]FieldSchema{
+									"owner": {
+										Type: "string",
+									},
+									"repository": {
+										Type: "string",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			"status": {
+				Type: "object",
+				Properties: map[string]FieldSchema{
+					"conditions": {
+						Type: "array",
+						Items: &FieldSchema{
+							Type: "object",
+							Properties: map[string]FieldSchema{
+								"type": {
+									Type: "string",
+								},
+								"status": {
+									Type: "string",
+								},
+								"reason": {
+									Type: "string",
+								},
+								"message": {
+									Type: "string",
+								},
+							},
+						},
+					},
+					"repositoryUrl": {
 						Type: "string",
 					},
 				},
@@ -449,6 +515,99 @@ func (r *EmbeddedRegistry) loadGitHubPlatformTypes() {
 								TargetKind:  "GitHubInfra",
 								TargetGroup: "github.platform.kubecore.io",
 								RefType:     RefTypeCustom,
+							},
+						},
+					},
+				},
+			},
+		},
+	})
+
+	// GithubProvider
+	r.RegisterType(&ResourceType{
+		APIVersion: "github.platform.kubecore.io/v1alpha1",
+		Kind:       "GithubProvider",
+		Namespaced: true,
+		Group:      "github.platform.kubecore.io",
+		Version:    "v1alpha1",
+		Plural:     "githubproviders",
+		Singular:   "githubprovider",
+		Fields: map[string]FieldSchema{
+			"spec": {
+				Type: "object",
+				Properties: map[string]FieldSchema{
+					"secretStoreRef": {
+						Type: "object",
+						Properties: map[string]FieldSchema{
+							"kind": {
+								Type: "string",
+							},
+							"name": {
+								Type: "string",
+							},
+						},
+					},
+					"aws": {
+						Type: "object",
+						Properties: map[string]FieldSchema{
+							"secretId": {
+								Type: "string",
+							},
+						},
+					},
+					"secret": {
+						Type: "object",
+						Properties: map[string]FieldSchema{
+							"name": {
+								Type: "string",
+							},
+							"namespace": {
+								Type: "string",
+							},
+						},
+					},
+					"github": {
+						Type: "object",
+						Properties: map[string]FieldSchema{
+							"organization": {
+								Type: "string",
+							},
+							"isEnterprise": {
+								Type: "boolean",
+							},
+							"baseURL": {
+								Type: "string",
+							},
+						},
+					},
+					"refreshInterval": {
+						Type: "string",
+					},
+					"kubernetesProviderConfigRef": {
+						Type: "string",
+					},
+				},
+			},
+			"status": {
+				Type: "object",
+				Properties: map[string]FieldSchema{
+					"conditions": {
+						Type: "array",
+						Items: &FieldSchema{
+							Type: "object",
+							Properties: map[string]FieldSchema{
+								"type": {
+									Type: "string",
+								},
+								"status": {
+									Type: "string",
+								},
+								"reason": {
+									Type: "string",
+								},
+								"message": {
+									Type: "string",
+								},
 							},
 						},
 					},
