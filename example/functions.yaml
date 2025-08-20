@@ -10,3 +10,38 @@ spec:
   # This is ignored when using the Development runtime.
   package: function-kubecore-schema-registry
 ---
+# Phase 1 Input Configuration
+apiVersion: registry.fn.crossplane.io/v1beta1
+kind: Input
+metadata:
+  name: schema-registry-phase1
+fetchResources:
+  - into: "project"
+    name: "example-project"
+    apiVersion: "github.platform.kubecore.io/v1alpha1"
+    kind: "GitHubProject"
+    optional: false
+  - into: "infra"
+    name: "example-infra"
+    apiVersion: "github.platform.kubecore.io/v1alpha1"
+    kind: "GitHubInfra"
+    optional: false
+  - into: "system" 
+    name: "example-system"
+    apiVersion: "github.platform.kubecore.io/v1alpha1"
+    kind: "GitHubSystem"
+    optional: false
+  - into: "kubenv"
+    name: "example-kubenv"
+    namespace: "default"
+    apiVersion: "platform.kubecore.io/v1alpha1"
+    kind: "KubEnv"
+    optional: false
+  - into: "kubeapp"
+    name: "example-kubeapp"
+    namespace: "default"
+    apiVersion: "platform.kubecore.io/v1alpha1"
+    kind: "KubeApp"
+    optional: false
+fetchTimeout: "10s"
+maxConcurrentFetches: 5

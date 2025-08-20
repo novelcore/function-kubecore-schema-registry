@@ -1,0 +1,97 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.16.0
+  name: inputs.registry.fn.crossplane.io
+spec:
+  group: registry.fn.crossplane.io
+  names:
+    categories:
+    - crossplane
+    kind: Input
+    listKind: InputList
+    plural: inputs
+    singular: input
+  scope: Namespaced
+  versions:
+  - name: v1beta1
+    schema:
+      openAPIV3Schema:
+        description: Input defines the Phase 1 input schema for the KubeCore Schema
+          Registry Function
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          fetchResources:
+            description: |-
+              FetchResources defines a list of direct resource references to fetch
+              Phase 1 supports only direct references (name/namespace)
+            items:
+              description: ResourceRequest defines a direct resource reference to
+                fetch
+              properties:
+                apiVersion:
+                  description: APIVersion of the resource (e.g., "v1", "apps/v1")
+                  type: string
+                into:
+                  description: Into specifies the field name where the resource will
+                    be stored in the response
+                  pattern: ^[a-zA-Z][a-zA-Z0-9_]*$
+                  type: string
+                kind:
+                  description: Kind of the resource (e.g., "Pod", "Service", "GitHubProject")
+                  type: string
+                name:
+                  description: Name is the name of the resource to fetch
+                  type: string
+                namespace:
+                  description: Namespace is the namespace of the resource (required
+                    for namespaced resources)
+                  type: string
+                optional:
+                  default: false
+                  description: Optional indicates whether the fetch should fail if
+                    the resource is not found
+                  type: boolean
+              required:
+              - apiVersion
+              - into
+              - kind
+              - name
+              type: object
+            type: array
+          fetchTimeout:
+            default: 5s
+            description: FetchTimeout specifies the maximum time to wait for each
+              resource fetch
+            pattern: ^[0-9]+(s|m|h)$
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          maxConcurrentFetches:
+            default: 10
+            description: MaxConcurrentFetches limits the number of concurrent fetch
+              operations
+            maximum: 50
+            minimum: 1
+            type: integer
+          metadata:
+            type: object
+        required:
+        - fetchResources
+        type: object
+    served: true
+    storage: true

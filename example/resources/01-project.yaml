@@ -32,3 +32,23 @@ spec:
   # Provider Resolution - reference the GithubProvider to derive ProviderConfig dynamically
   githubProviderRef:
     name: gh-default
+  # alternative:
+  # Dynamic Provider Resolution via Label Selector
+  githubProviderSelector:
+    matchLabels:
+      kubecore.io/organization: novelcore
+      kubecore.io/scmp-provider-type: github
+  # alternative, future direction
+  # githubProviderSelector:
+  #   matchLabels:
+  #     tier: platform
+  #     organization: novelcore
+  #   matchExpressions:
+  #     - key: environment
+  #       operator: In
+  #       values: ["test", "staging"]
+  #     - key: region
+  #       operator: Exists
+  #     - key: provider-type
+  #       operator: In
+  #       values: ["github"]

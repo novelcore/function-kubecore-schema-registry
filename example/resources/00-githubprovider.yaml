@@ -1,0 +1,43 @@
+apiVersion: external-secrets.io/v1
+kind: ClusterSecretStore
+metadata:
+  name: aws-secretsmanager
+spec:
+  provider:
+    aws:
+      auth:
+        jwt:
+          serviceAccountRef:
+            name: external-secrets
+            namespace: external-secrets
+      region: eu-central-1
+      service: SecretsManager
+---
+apiVersion: github.platform.kubecore.io/v1alpha1
+kind: GithubProvider
+metadata:
+  name: gh-default
+  labels:
+    kubecore.io/organization: novelcore
+    kubecore.io/scmp-provider-type: github
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: aws-secretsmanager
+  aws:
+    secretId: "/org/kubecore/test/github/provider/main"
+  secret:
+    name: gh-default # Will be transformed to "github-provider-gh-default"
+    key: credentials
+    namespace: crossplane-system
+
+  refreshInterval: 1m
+
+  # Provider configuration references
+  kubernetesProviderConfigRef: kubesys-enhanced
+
+  # GitHub organization and enterprise configuration
+  github:
+    organization: novelcore
+    # baseURL: https://api.github.com
+    isEnterprise: false

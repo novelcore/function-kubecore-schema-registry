@@ -1,0 +1,334 @@
+## Function Inputs
+input:
+  apiVersion: kubecore-schema-registry.fn.kubecore.platform.io/v1beta1
+  kind: Input
+  spec:
+    # Fetch resources from the cluster, this function should accept as input a list of resources to fetch
+    fetchResources:
+    # Each resource in the list should have a matchType, witch will be used to fetch the resource from the cluster
+    # Each resource should have a Kind and apiVersion, which will be used to fetch the resource from the cluster
+    # Each resource should have a selector, witch should be configured based on the matchType
+    # The matchType should be one of the following:
+    # - label: fetch the resource from the cluster using a label selector
+    # - direct: fetch the resource from the cluster using a direct reference
+    # - indirect: fetch the resource from the cluster using a indirect reference
+    # - query: fetch the resource from the cluster using a query
+    - apiVersion: kubecore.platform.io/v1beta1
+      kind: XKubeCluster
+      into: kubeclusterList
+      matchType:
+        type: label
+        selector:
+          # minMatches and maxMatches are optional, if not provided, the function will fetch all resources
+          minMatches: 1
+          maxMatches: 1
+          # If selector of type label, the function will fetch the resource from the cluster using a label selector
+          matchLabels:
+          - kubecore.io/cloud-provider: aws
+          - kubecore.io/organization: novelcore
+          - kubecore.io/kubeproject: demo-project
+
+    - apiVersion: kubecore.platform.io/v1beta1
+      kind: XGithubProject
+      into: kubeproject
+      matchType:
+        type: direct
+        selector:
+          # in case of direct matchType, the function will fetch the resource from the cluster using a direct reference
+          # same for the minMatches and maxMatches, they should be by default 1 and optional
+          minMatches: 1
+          maxMatches: 1
+          directReference:
+            name: demo-project # This is required, if not provided, the function will not fetch the resource
+            namespace: test # This is optional, if not provided, the function will fetch cluster scoped resources
+      # response Schema, this is optional, if not provided, the function will not fetch the resource
+      # responseSchema, if defined through include: true, the function should fetch the parrent direct refferences, 
+      #  This means that if the resource XGithubProject is requested, and this resource has a direct refference to another resource,
+      # such as XGithubProvider, the function should fetch the XGithubProvider resource and return it in the response
+      # depth is optional, if not provided, the function will not fetch the depth 1
+      # depth is the depth of the parent resources to fetch, if not provided, the function will fetch the parent resources up to the depth of the resource
+      # depth is an integer, if not provided, the function will fetch the parent resources up to the depth of the resource
+      # depth defines the depth of the parent resources to fetch, for instance if depth is 1, the function will fetch the parent resources up to the depth of the resource
+      # on the other hand, if depth is 2, the function will fetch the parent resources up to the depth of the resource and the parent resources of the parent resources,
+      # in our example if depth is 2 the schema of the XGithubProvider should include its parrent direct refference if any.
+      responseSchema:
+        parentResources:
+          include: true
+          depth: 1
+
+    - apiVersion: kubecore.platform.io/v1beta1
+      kind: XGithubProject
+      # into is mandatory, it is the name variable within the context to add the requested resource
+      into: kubeproject-list
+      matchType:
+        type: expression
+        selector:
+          minMatches: 1
+          maxMatches: 1
+          # selector labels with expressions
+          # Expression selector is a more flexible way to select resources, it allows to select resources based on the labels and the values of the labels
+          # The operator can be one of the following: In, NotIn, Exists, DoesNotExist
+          # The key is the label key, the operator is the operator to use, the values are the values to use
+          # The values are optional, if not provided, the function will fetch all resources
+          # The values are an array of strings, if not provided, the function will fetch all resources
+          # The values are an array of strings, if not provided, the function will fetch all resources
+          matchExpressions:
+          - key: kubecore.io/organization
+            operator: In
+            values: [ "novelcore", "demo" ]
+          - key: region
+            operator: Exists
+          - key: provider-type
+            operator: In
+            values: [ "github" ]
+
+## Function Response Schema
+
+# The response follows the standard Crossplane function response format
+# with a custom context structure for easy go-template access
+
+apiVersion: kubecore-schema-registry.fn.kubecore.platform.io/v1beta1
+kind: Response
+spec:
+  # Standard Crossplane function response structure
+  # The context will be available in go-templates as:
+  # {{ index .context "kubecore-schema-registry.fn.kubecore.platform.io/fetched-resources" }}
+  context:
+    kubecore-schema-registry.fn.kubecore.platform.io/fetched-resources:
+      # Each 'into' field from the input maps to a key here
+      # Structure: into-name -> array of resources (even for single resources)
+      kubeclusterList:
+        - metadata:
+            name: demo-cluster
+            namespace: test
+            uid: "abc-123-def"
+            resourceVersion: "12345"
+            labels:
+              kubecore.io/cloud-provider: aws
+              kubecore.io/organization: novelcore
+              kubecore.io/kubeproject: demo-project
+            annotations:
+              kubectl.kubernetes.io/last-applied-configuration: "{...}"
+          spec:
+            kubeNetRef:
+              name: demo-network
+            githubProjectRef:
+              name: demo-project
+            cloudProvider: aws
+            cluster:
+              version: "1.33"
+              region: eu-west-3
+          status:
+            conditions:
+              - type: Ready
+                status: "True"
+                lastTransitionTime: "2025-01-15T10:30:00Z"
+            phase: Active
+          # Additional metadata for easier templating
+          _kubecore:
+            matchedBy: label
+            fetchedAt: "2025-01-15T10:30:00Z"
+            parentResources: []  # Empty if no parent resources requested
+
+      kubeproject:
+        - metadata:
+            name: demo-project
+            namespace: test
+            uid: "def-456-ghi"
+            resourceVersion: "67890"
+            labels:
+              kubecore.io/organization: novelcore
+              kubecore.io/scmp-provider-type: github
+          spec:
+            description: "Demo project managed by KubeCore"
+            visibility: private
+            repositorySource:
+              type: template
+              template:
+                owner: novelcore
+                repository: kubeproject-template
+            githubProviderRef:
+              name: gh-default
+          status:
+            conditions:
+              - type: Ready
+                status: "True"
+            repositoryUrl: "https://github.com/novelcore/demo-project"
+          _kubecore:
+            matchedBy: direct
+            fetchedAt: "2025-01-15T10:30:00Z"
+            # Parent resources included when responseSchema.parentResources.include: true
+            parentResources:
+              - kind: GithubProvider
+                apiVersion: github.platform.kubecore.io/v1alpha1
+                metadata:
+                  name: gh-default
+                  labels:
+                    kubecore.io/organization: novelcore
+                    kubecore.io/scmp-provider-type: github
+                spec:
+                  secretStoreRef:
+                    kind: ClusterSecretStore
+                    name: aws-secretsmanager
+                  github:
+                    organization: novelcore
+                    isEnterprise: false
+                _kubecore:
+                  relationship: parent
+                  depth: 1
+
+      kubeproject-list:
+        - metadata:
+            name: demo-project
+            namespace: test
+            # ... same as above
+          # ... rest of resource
+        # Additional projects if matched by expression selector
+
+  # Summary information for debugging/logging
+  fetchSummary:
+    totalResourcesFetched: 3
+    fetchDetails:
+      - into: kubeclusterList
+        requested: 1
+        fetched: 1
+        matchType: label
+        status: success
+      - into: kubeproject
+        requested: 1
+        fetched: 1
+        matchType: direct
+        status: success
+        parentResourcesFetched: 1
+      - into: kubeproject-list  
+        requested: "1-1" # minMatches-maxMatches
+        fetched: 1
+        matchType: expression
+        status: success
+    errors: []
+
+---
+
+## Go Template Usage Examples
+
+# Example 1: Access resources by 'into' name
+apiVersion: gotemplating.fn.crossplane.io/v1beta1
+kind: GoTemplate
+source: Inline
+inline:
+  template: |
+    {{- $fetchedResources := index .context "kubecore-schema-registry.fn.kubecore.platform.io/fetched-resources" }}
+    {{- $clusters := index $fetchedResources "kubeclusterList" }}
+    {{- $projects := index $fetchedResources "kubeproject" }}
+    
+    {{- range $i, $cluster := $clusters }}
+    ---
+    apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: cluster-config-{{ $cluster.metadata.name }}
+      annotations:
+        kubecore.io/source-cluster: {{ $cluster.metadata.name }}
+        kubecore.io/cloud-provider: {{ index $cluster.metadata.labels "kubecore.io/cloud-provider" }}
+    data:
+      cluster-name: {{ $cluster.metadata.name }}
+      region: {{ $cluster.spec.cluster.region }}
+      version: {{ $cluster.spec.cluster.version }}
+      ready: {{ (index $cluster.status.conditions 0).status }}
+    {{- end }}
+
+# Example 2: Access parent resources  
+apiVersion: gotemplating.fn.crossplane.io/v1beta1
+kind: GoTemplate
+source: Inline
+inline:
+  template: |
+    {{- $fetchedResources := index .context "kubecore-schema-registry.fn.kubecore.platform.io/fetched-resources" }}
+    {{- $projects := index $fetchedResources "kubeproject" }}
+    
+    {{- range $project := $projects }}
+    {{- range $parent := $project._kubecore.parentResources }}
+    {{- if eq $parent.kind "GithubProvider" }}
+    ---
+    apiVersion: v1
+    kind: Secret
+    metadata:
+      name: github-credentials-{{ $project.metadata.name }}
+    stringData:
+      organization: {{ $parent.spec.github.organization }}
+      provider-name: {{ $parent.metadata.name }}
+      secret-ref: {{ $parent.spec.secret.name }}
+    {{- end }}
+    {{- end }}
+    {{- end }}
+
+# Example 3: Conditional logic based on resource properties
+apiVersion: gotemplating.fn.crossplane.io/v1beta1  
+kind: GoTemplate
+source: Inline
+inline:
+  template: |
+    {{- $fetchedResources := index .context "kubecore-schema-registry.fn.kubecore.platform.io/fetched-resources" }}
+    {{- $clusters := index $fetchedResources "kubeclusterList" }}
+    
+    {{- range $cluster := $clusters }}
+    {{- $cloudProvider := index $cluster.metadata.labels "kubecore.io/cloud-provider" }}
+    {{- if eq $cloudProvider "aws" }}
+    ---
+    apiVersion: ec2.aws.crossplane.io/v1beta1
+    kind: Instance
+    metadata:
+      name: monitoring-instance-{{ $cluster.metadata.name }}
+    spec:
+      forProvider:
+        region: {{ $cluster.spec.cluster.region }}
+        instanceType: t3.medium
+        # Reference cluster configuration
+        tags:
+          cluster-name: {{ $cluster.metadata.name }}
+          purpose: monitoring
+    {{- end }}
+    {{- end }}
+
+---
+
+## Response Schema Design Rationale
+
+### Key Design Decisions:
+
+1. **Namespaced Context Key**: Using `kubecore-schema-registry.fn.kubecore.platform.io/fetched-resources` 
+   prevents collisions with other functions and clearly identifies the source.
+
+2. **Arrays for All Resources**: Even single resources are returned as arrays for consistent 
+   template handling. Templates can use `index 0` for single resources or range over all.
+
+3. **Complete Kubernetes Resource Structure**: Maintains metadata, spec, and status fields 
+   as expected, enabling full access to resource information.
+
+4. **Extended Metadata (_kubecore)**: Additional metadata helps with debugging and provides
+   context about how resources were fetched and their relationships.
+
+5. **Parent Resource Embedding**: When requested, parent resources are embedded directly 
+   in the `_kubecore.parentResources` array with clear depth indicators.
+
+6. **Fetch Summary**: Provides operational insight into what was fetched, useful for 
+   debugging and monitoring function execution.
+
+### Template Access Patterns:
+
+```go
+// Access pattern 1: Get all resources of a type
+$resources := index (index .context "kubecore-schema-registry.fn.kubecore.platform.io/fetched-resources") "into-name"
+
+// Access pattern 2: Get first/single resource
+$resource := index (index (index .context "kubecore-schema-registry.fn.kubecore.platform.io/fetched-resources") "into-name") 0
+
+// Access pattern 3: Check if resources exist
+{{- if index (index .context "kubecore-schema-registry.fn.kubecore.platform.io/fetched-resources") "into-name" }}
+
+// Access pattern 4: Access parent resources
+{{- range $parent := $resource._kubecore.parentResources }}
+```
+
+This schema provides maximum flexibility for go-templating while maintaining clear structure 
+and supporting all the advanced features like parent resource fetching and multiple match types.

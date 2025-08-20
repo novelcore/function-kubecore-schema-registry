@@ -279,4 +279,90 @@ When implementing any component:
 7. **Fail fast** - Validate inputs early
 8. **Optimize for readability** - Clear code over clever code
 
+## Function Response Model Maintenance
+
+**CRITICAL**: Always update `example/model.yaml` to match the function response schema:
+
+
+### Testing Handoff Protocol
+After implementing a function change and its finalized, ask for handoff to the  @crossplane-function-tester , generate a Testing Specification for the crossplane-function-tester agent:
+
+Testing Specification Format
+```yaml
+apiVersion: testing.kubecore.io/v1
+kind: TestingSpecification
+metadata:
+  name: <function-name>-test
+  version: <function-version>
+spec:
+  function:
+    name: <function-name>
+    image: <function-image:tag>
+    
+  inputSchema:
+    apiVersion: <input-api-version>
+    kind: <input-kind>
+    sampleInput: |
+      # Minimal valid input example
+      
+  expectedOutput:
+    contextKeys:
+      - path: context.<key-path>
+        type: <object|array|string|number>
+        required: true
+        description: <what this output contains>
+        
+    validations:
+      - type: exists
+        path: context.<key-path>
+        message: <validation-failure-message>
+      - type: contains
+        path: context.<key-path>
+        value: <expected-value-or-pattern>
+        message: <validation-failure-message>
+        
+  testResources:
+    - apiVersion: <resource-api-version>
+      kind: <resource-kind>
+      metadata:
+        name: test-resource
+        namespace: test
+      spec: |
+        # Minimal resource spec for testing
+        
+  successCriteria:
+    - ConfigMap created with name pattern: <pattern>
+    - ConfigMap contains key: <key-name>
+    - XResource reaches Ready state within 30s
+    - Output context contains: <specific-fields>
+```
+#### Handoff Process
+
+1. Complete implementation following all patterns above
+2. Generate Testing Specification based on implemented functionality
+3. Document changes in structured format:
+```yaml
+changes:
+  - component: <component-name>
+    type: <added|modified|removed>
+    description: <concise-change-description>
+```
+
+Pass to tester with command: @crossplane-function-tester test with specification: <specification>
+
+
+
+### Model Update Process:
+1. **Before modifying response structures**: Review current `example/model.json`
+2. **After implementing changes**: Update the model to reflect new response format
+3. **Validate schema**: Ensure all response fields match the documented structure
+4. **Test compatibility**: Verify template examples still work with updated model
+
+### Key Response Patterns:
+- Use `context.schemaRegistryResults` as the primary data structure
+- Maintain flat arrays for template iteration (`discoveredResources`)
+- Provide grouped access patterns (`resourcesByKind`)
+- Include comprehensive statistics (`discoveryStats`)
+- Support backward compatibility when possible
+
 Your role is to take specifications and implement them following these patterns. Focus on clean, maintainable, performant Go code that adheres to both Go idioms and Crossplane conventions.
