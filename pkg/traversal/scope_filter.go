@@ -1,14 +1,13 @@
 package traversal
 
 import (
-	"fmt"
 	"strings"
 	
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	
 	"github.com/crossplane/function-sdk-go/logging"
 	
-	"github.com/crossplane/function-kubecore-schema-registry/pkg/dynamic"
+	dynamictypes "github.com/crossplane/function-kubecore-schema-registry/pkg/dynamic"
 )
 
 // ScopeFilter filters resources based on scope criteria
@@ -17,13 +16,13 @@ type ScopeFilter interface {
 	FilterResources(resources []*unstructured.Unstructured, config *ScopeFilterConfig) []*unstructured.Unstructured
 	
 	// FilterReferences filters reference fields based on scope configuration
-	FilterReferences(references []dynamic.ReferenceField, config *ScopeFilterConfig) []dynamic.ReferenceField
+	FilterReferences(references []dynamictypes.ReferenceField, config *ScopeFilterConfig) []dynamictypes.ReferenceField
 	
 	// ShouldIncludeResource determines if a resource should be included in traversal
 	ShouldIncludeResource(resource *unstructured.Unstructured, config *ScopeFilterConfig) bool
 	
 	// ShouldFollowReference determines if a reference should be followed
-	ShouldFollowReference(reference dynamic.ReferenceField, config *ScopeFilterConfig) bool
+	ShouldFollowReference(reference dynamictypes.ReferenceField, config *ScopeFilterConfig) bool
 	
 	// GetFilterStatistics returns statistics about filtering operations
 	GetFilterStatistics() *FilterStatistics
@@ -163,8 +162,8 @@ func (sf *DefaultScopeFilter) FilterResources(resources []*unstructured.Unstruct
 }
 
 // FilterReferences filters reference fields based on scope configuration
-func (sf *DefaultScopeFilter) FilterReferences(references []dynamic.ReferenceField, config *ScopeFilterConfig) []dynamic.ReferenceField {
-	var filtered []dynamic.ReferenceField
+func (sf *DefaultScopeFilter) FilterReferences(references []dynamictypes.ReferenceField, config *ScopeFilterConfig) []dynamictypes.ReferenceField {
+	var filtered []dynamictypes.ReferenceField
 	
 	for _, reference := range references {
 		sf.statistics.ReferencesEvaluated++
@@ -252,7 +251,7 @@ func (sf *DefaultScopeFilter) ShouldIncludeResource(resource *unstructured.Unstr
 }
 
 // ShouldFollowReference determines if a reference should be followed
-func (sf *DefaultScopeFilter) ShouldFollowReference(reference dynamic.ReferenceField, config *ScopeFilterConfig) bool {
+func (sf *DefaultScopeFilter) ShouldFollowReference(reference dynamictypes.ReferenceField, config *ScopeFilterConfig) bool {
 	// Apply platform-only filter
 	if config.PlatformOnly {
 		if !sf.platformChecker.IsPlatformKind(reference.TargetKind, reference.TargetGroup) {
@@ -295,7 +294,7 @@ func (sf *DefaultScopeFilter) ShouldFollowReference(reference dynamic.ReferenceF
 	if !config.CrossNamespaceEnabled {
 		// This is a simplified check - in practice we'd need to compare
 		// the source resource's namespace with the target's namespace
-		if reference.RefType != dynamic.RefTypeOwnerRef {
+		if reference.RefType != dynamictypes.RefTypeOwnerRef {
 			// For now, allow owner references across namespaces
 			// but restrict other reference types
 			sf.statistics.FilterReasons["cross_namespace_disabled"]++

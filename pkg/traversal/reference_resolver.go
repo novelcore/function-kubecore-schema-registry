@@ -3,7 +3,6 @@ package traversal
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"strings"
 	"time"
 	
@@ -14,7 +13,7 @@ import (
 	
 	"github.com/crossplane/function-sdk-go/logging"
 	
-	"github.com/crossplane/function-kubecore-schema-registry/pkg/dynamic"
+	dynamictypes "github.com/crossplane/function-kubecore-schema-registry/pkg/dynamic"
 	functionerrors "github.com/crossplane/function-kubecore-schema-registry/pkg/errors"
 	"github.com/crossplane/function-kubecore-schema-registry/pkg/registry"
 )
@@ -22,16 +21,16 @@ import (
 // ReferenceResolver resolves references in Kubernetes resources
 type ReferenceResolver interface {
 	// ExtractReferences extracts reference fields from a resource
-	ExtractReferences(ctx context.Context, resource *unstructured.Unstructured) ([]dynamic.ReferenceField, error)
+	ExtractReferences(ctx context.Context, resource *unstructured.Unstructured) ([]dynamictypes.ReferenceField, error)
 	
 	// ResolveReferences resolves reference fields to actual resources
-	ResolveReferences(ctx context.Context, source *unstructured.Unstructured, references []dynamic.ReferenceField) ([]*unstructured.Unstructured, []error)
+	ResolveReferences(ctx context.Context, source *unstructured.Unstructured, references []dynamictypes.ReferenceField) ([]*unstructured.Unstructured, []error)
 	
 	// ResolveReference resolves a single reference field
-	ResolveReference(ctx context.Context, source *unstructured.Unstructured, reference dynamic.ReferenceField) (*unstructured.Unstructured, error)
+	ResolveReference(ctx context.Context, source *unstructured.Unstructured, reference dynamictypes.ReferenceField) (*unstructured.Unstructured, error)
 	
 	// ValidateReference validates if a reference can be resolved
-	ValidateReference(reference dynamic.ReferenceField) error
+	ValidateReference(reference dynamictypes.ReferenceField) error
 }
 
 // DefaultReferenceResolver implements ReferenceResolver interface
@@ -43,7 +42,7 @@ type DefaultReferenceResolver struct {
 	registry registry.Registry
 	
 	// referenceDetector detects reference fields in resources
-	referenceDetector dynamic.ReferenceDetector
+	referenceDetector dynamictypes.ReferenceDetector
 	
 	// logger provides structured logging
 	logger logging.Logger
@@ -55,7 +54,7 @@ type DefaultReferenceResolver struct {
 // ReferenceResolutionResult contains the result of reference resolution
 type ReferenceResolutionResult struct {
 	// Reference is the reference field that was resolved
-	Reference dynamic.ReferenceField
+	Reference dynamictypes.ReferenceField
 	
 	// ResolvedResource is the resolved resource (nil if not found)
 	ResolvedResource *unstructured.Unstructured
@@ -75,14 +74,14 @@ func NewDefaultReferenceResolver(dynamicClient dynamic.Interface, registry regis
 	return &DefaultReferenceResolver{
 		dynamicClient:     dynamicClient,
 		registry:          registry,
-		referenceDetector: dynamic.NewReferenceDetector(logger),
+		referenceDetector: dynamictypes.NewReferenceDetector(logger),
 		logger:            logger,
 		cache:             NewLRUCache(1000, 5*time.Minute),
 	}
 }
 
 // ExtractReferences extracts reference fields from a resource
-func (rr *DefaultReferenceResolver) ExtractReferences(ctx context.Context, resource *unstructured.Unstructured) ([]dynamic.ReferenceField, error) {
+func (rr *DefaultReferenceResolver) ExtractReferences(ctx context.Context, resource *unstructured.Unstructured) ([]dynamictypes.ReferenceField, error) {
 	// Get resource type information
 	resourceType, err := rr.registry.GetResourceType(resource.GetAPIVersion(), resource.GetKind())
 	if err != nil {
@@ -92,7 +91,7 @@ func (rr *DefaultReferenceResolver) ExtractReferences(ctx context.Context, resou
 	}
 	
 	// Extract references using multiple methods
-	var allReferences []dynamic.ReferenceField
+	var allReferences []dynamictypes.ReferenceField
 	
 	// Method 1: Registry-based detection (if available)
 	if resourceType != nil {
@@ -129,7 +128,7 @@ func (rr *DefaultReferenceResolver) ExtractReferences(ctx context.Context, resou
 }
 
 // ResolveReferences resolves reference fields to actual resources
-func (rr *DefaultReferenceResolver) ResolveReferences(ctx context.Context, source *unstructured.Unstructured, references []dynamic.ReferenceField) ([]*unstructured.Unstructured, []error) {
+func (rr *DefaultReferenceResolver) ResolveReferences(ctx context.Context, source *unstructured.Unstructured, references []dynamictypes.ReferenceField) ([]*unstructured.Unstructured, []error) {
 	var resolvedResources []*unstructured.Unstructured
 	var errors []error
 	
@@ -138,7 +137,7 @@ func (rr *DefaultReferenceResolver) ResolveReferences(ctx context.Context, sourc
 	
 	// Start goroutines for each reference
 	for _, ref := range references {
-		go func(ref dynamic.ReferenceField) {
+		go func(ref dynamictypes.ReferenceField) {
 			startTime := time.Now()
 			
 			resolved, err := rr.ResolveReference(ctx, source, ref)
@@ -167,7 +166,7 @@ func (rr *DefaultReferenceResolver) ResolveReferences(ctx context.Context, sourc
 }
 
 // ResolveReference resolves a single reference field
-func (rr *DefaultReferenceResolver) ResolveReference(ctx context.Context, source *unstructured.Unstructured, reference dynamic.ReferenceField) (*unstructured.Unstructured, error) {
+func (rr *DefaultReferenceResolver) ResolveReference(ctx context.Context, source *unstructured.Unstructured, reference dynamictypes.ReferenceField) (*unstructured.Unstructured, error) {
 	// Generate cache key
 	cacheKey := rr.generateCacheKey(source, reference)
 	
@@ -230,7 +229,7 @@ func (rr *DefaultReferenceResolver) ResolveReference(ctx context.Context, source
 }
 
 // ValidateReference validates if a reference can be resolved
-func (rr *DefaultReferenceResolver) ValidateReference(reference dynamic.ReferenceField) error {
+func (rr *DefaultReferenceResolver) ValidateReference(reference dynamictypes.ReferenceField) error {
 	// Validate required fields
 	if reference.FieldPath == "" {
 		return fmt.Errorf("reference field path is empty")
@@ -251,35 +250,35 @@ func (rr *DefaultReferenceResolver) ValidateReference(reference dynamic.Referenc
 // Helper methods
 
 // extractReferencesFromRegistry extracts references using registry information
-func (rr *DefaultReferenceResolver) extractReferencesFromRegistry(resource *unstructured.Unstructured, resourceType registry.ResourceType) ([]dynamic.ReferenceField, error) {
+func (rr *DefaultReferenceResolver) extractReferencesFromRegistry(resource *unstructured.Unstructured, resourceType registry.ResourceType) ([]dynamictypes.ReferenceField, error) {
 	// This would use the registry's schema information to identify reference fields
 	// For now, return empty slice as the registry interface would need extension
-	return []dynamic.ReferenceField{}, nil
+	return []dynamictypes.ReferenceField{}, nil
 }
 
 // extractReferencesFromPatterns extracts references using pattern matching
-func (rr *DefaultReferenceResolver) extractReferencesFromPatterns(resource *unstructured.Unstructured) ([]dynamic.ReferenceField, error) {
+func (rr *DefaultReferenceResolver) extractReferencesFromPatterns(resource *unstructured.Unstructured) ([]dynamictypes.ReferenceField, error) {
 	// Use the reference detector to find references based on patterns
 	resourceSchema := rr.convertToResourceSchema(resource)
 	if resourceSchema == nil {
-		return []dynamic.ReferenceField{}, nil
+		return []dynamictypes.ReferenceField{}, nil
 	}
 	
 	return rr.referenceDetector.DetectReferences(resourceSchema)
 }
 
 // extractOwnerReferences extracts owner references
-func (rr *DefaultReferenceResolver) extractOwnerReferences(resource *unstructured.Unstructured) ([]dynamic.ReferenceField, error) {
-	var references []dynamic.ReferenceField
+func (rr *DefaultReferenceResolver) extractOwnerReferences(resource *unstructured.Unstructured) ([]dynamictypes.ReferenceField, error) {
+	var references []dynamictypes.ReferenceField
 	
 	ownerRefs := resource.GetOwnerReferences()
 	for i, ownerRef := range ownerRefs {
-		ref := dynamic.ReferenceField{
+		ref := dynamictypes.ReferenceField{
 			FieldPath:       fmt.Sprintf("metadata.ownerReferences[%d]", i),
 			FieldName:       "ownerReference",
 			TargetKind:      ownerRef.Kind,
 			TargetGroup:     ownerRef.APIVersion, // This contains group/version
-			RefType:         dynamic.RefTypeOwnerRef,
+			RefType:         dynamictypes.RefTypeOwnerRef,
 			Confidence:      1.0, // Owner references are always accurate
 			DetectionMethod: "ownerReference",
 		}
@@ -301,7 +300,7 @@ func (rr *DefaultReferenceResolver) extractOwnerReferences(resource *unstructure
 }
 
 // convertToResourceSchema converts an unstructured resource to a ResourceSchema
-func (rr *DefaultReferenceResolver) convertToResourceSchema(resource *unstructured.Unstructured) *dynamic.ResourceSchema {
+func (rr *DefaultReferenceResolver) convertToResourceSchema(resource *unstructured.Unstructured) *dynamictypes.ResourceSchema {
 	// This is a simplified conversion
 	// In a full implementation, this would:
 	// 1. Extract the spec/status fields
@@ -309,7 +308,7 @@ func (rr *DefaultReferenceResolver) convertToResourceSchema(resource *unstructur
 	// 3. Build field definitions with types
 	// 4. Return a proper ResourceSchema
 	
-	fields := make(map[string]*dynamic.FieldDefinition)
+	fields := make(map[string]*dynamictypes.FieldDefinition)
 	
 	// Analyze spec fields
 	if spec, found, _ := unstructured.NestedMap(resource.Object, "spec"); found {
@@ -321,24 +320,24 @@ func (rr *DefaultReferenceResolver) convertToResourceSchema(resource *unstructur
 		rr.analyzeFields(status, "status", fields)
 	}
 	
-	return &dynamic.ResourceSchema{
+	return &dynamictypes.ResourceSchema{
 		Fields:      fields,
 		Description: fmt.Sprintf("Schema for %s", resource.GetKind()),
 	}
 }
 
 // analyzeFields recursively analyzes fields to build field definitions
-func (rr *DefaultReferenceResolver) analyzeFields(obj map[string]interface{}, basePath string, fields map[string]*dynamic.FieldDefinition) {
+func (rr *DefaultReferenceResolver) analyzeFields(obj map[string]interface{}, basePath string, fields map[string]*dynamictypes.FieldDefinition) {
 	for key, value := range obj {
 		fieldPath := fmt.Sprintf("%s.%s", basePath, key)
 		
-		fieldDef := &dynamic.FieldDefinition{
+		fieldDef := &dynamictypes.FieldDefinition{
 			Type: rr.determineFieldType(value),
 		}
 		
 		// Recursively analyze nested objects
 		if nestedMap, ok := value.(map[string]interface{}); ok {
-			properties := make(map[string]*dynamic.FieldDefinition)
+			properties := make(map[string]*dynamictypes.FieldDefinition)
 			rr.analyzeNestedFields(nestedMap, properties)
 			fieldDef.Properties = properties
 		}
@@ -348,9 +347,9 @@ func (rr *DefaultReferenceResolver) analyzeFields(obj map[string]interface{}, ba
 }
 
 // analyzeNestedFields analyzes nested fields
-func (rr *DefaultReferenceResolver) analyzeNestedFields(obj map[string]interface{}, properties map[string]*dynamic.FieldDefinition) {
+func (rr *DefaultReferenceResolver) analyzeNestedFields(obj map[string]interface{}, properties map[string]*dynamictypes.FieldDefinition) {
 	for key, value := range obj {
-		properties[key] = &dynamic.FieldDefinition{
+		properties[key] = &dynamictypes.FieldDefinition{
 			Type: rr.determineFieldType(value),
 		}
 	}
@@ -377,9 +376,9 @@ func (rr *DefaultReferenceResolver) determineFieldType(value interface{}) string
 }
 
 // deduplicateReferences removes duplicate references
-func (rr *DefaultReferenceResolver) deduplicateReferences(references []dynamic.ReferenceField) []dynamic.ReferenceField {
+func (rr *DefaultReferenceResolver) deduplicateReferences(references []dynamictypes.ReferenceField) []dynamictypes.ReferenceField {
 	seen := make(map[string]bool)
-	var result []dynamic.ReferenceField
+	var result []dynamictypes.ReferenceField
 	
 	for _, ref := range references {
 		key := fmt.Sprintf("%s:%s:%s", ref.FieldPath, ref.TargetKind, ref.TargetGroup)
@@ -420,7 +419,7 @@ func (rr *DefaultReferenceResolver) extractReferenceValue(resource *unstructured
 }
 
 // parseReferenceValue parses a reference value to extract target name and namespace
-func (rr *DefaultReferenceResolver) parseReferenceValue(refValue interface{}, reference dynamic.ReferenceField, sourceNamespace string) (name, namespace string, err error) {
+func (rr *DefaultReferenceResolver) parseReferenceValue(refValue interface{}, reference dynamictypes.ReferenceField, sourceNamespace string) (name, namespace string, err error) {
 	switch v := refValue.(type) {
 	case string:
 		// Simple string reference (just the name)
@@ -525,7 +524,7 @@ func (rr *DefaultReferenceResolver) kindToResource(kind string) string {
 }
 
 // generateCacheKey generates a cache key for a reference resolution
-func (rr *DefaultReferenceResolver) generateCacheKey(source *unstructured.Unstructured, reference dynamic.ReferenceField) string {
+func (rr *DefaultReferenceResolver) generateCacheKey(source *unstructured.Unstructured, reference dynamictypes.ReferenceField) string {
 	return fmt.Sprintf("%s/%s/%s:%s:%s:%s",
 		source.GetAPIVersion(),
 		source.GetKind(),

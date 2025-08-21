@@ -8,6 +8,7 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	
+	dynamictypes "github.com/crossplane/function-kubecore-schema-registry/pkg/dynamic"
 	"github.com/crossplane/function-kubecore-schema-registry/pkg/graph"
 	"github.com/crossplane/function-kubecore-schema-registry/pkg/registry"
 )
@@ -240,7 +241,7 @@ type DiscoveryResult struct {
 	Resources []*unstructured.Unstructured
 	
 	// References contains the reference fields found in the resources
-	References map[string][]dynamic.ReferenceField
+	References map[string][]dynamictypes.ReferenceField
 	
 	// Depth is the depth at which these resources were discovered
 	Depth int

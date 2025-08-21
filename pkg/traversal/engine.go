@@ -15,7 +15,7 @@ import (
 	
 	"github.com/crossplane/function-sdk-go/logging"
 	
-	"github.com/crossplane/function-kubecore-schema-registry/pkg/dynamic"
+	dynamictypes "github.com/crossplane/function-kubecore-schema-registry/pkg/dynamic"
 	functionerrors "github.com/crossplane/function-kubecore-schema-registry/pkg/errors"
 	"github.com/crossplane/function-kubecore-schema-registry/pkg/graph"
 	"github.com/crossplane/function-kubecore-schema-registry/pkg/registry"
@@ -208,7 +208,7 @@ func (te *DefaultTraversalEngine) DiscoverReferencedResources(ctx context.Contex
 	
 	result := &DiscoveryResult{
 		Resources:  make([]*unstructured.Unstructured, 0),
-		References: make(map[string][]dynamic.ReferenceField),
+		References: make(map[string][]dynamictypes.ReferenceField),
 		Depth:      1, // This is always depth 1 since it's direct references
 		Statistics: &DiscoveryStatistics{
 			ResourcesRequested: len(resources),
@@ -225,7 +225,7 @@ func (te *DefaultTraversalEngine) DiscoverReferencedResources(ctx context.Contex
 	// Results collection
 	var mu sync.Mutex
 	discoveredResources := make(map[string]*unstructured.Unstructured)
-	allReferences := make(map[string][]dynamic.ReferenceField)
+	allReferences := make(map[string][]dynamictypes.ReferenceField)
 	
 	// Process each resource
 	for _, resource := range resources {
@@ -308,7 +308,7 @@ func (te *DefaultTraversalEngine) DiscoverReferencedResources(ctx context.Contex
 // BuildResourceGraph builds a resource dependency graph from discovered resources
 func (te *DefaultTraversalEngine) BuildResourceGraph(ctx context.Context, resources []*unstructured.Unstructured, config *TraversalConfig) (*graph.ResourceGraph, error) {
 	// Extract all references first
-	allReferences := make(map[string][]dynamic.ReferenceField)
+	allReferences := make(map[string][]dynamictypes.ReferenceField)
 	
 	for _, resource := range resources {
 		resourceID := te.generateResourceID(resource)
@@ -563,7 +563,7 @@ func (te *DefaultTraversalEngine) buildDiscoveryPath(resource *unstructured.Unst
 }
 
 // addReferencesToGraph adds reference edges to the graph
-func (te *DefaultTraversalEngine) addReferencesToGraph(resourceGraph *graph.ResourceGraph, references map[string][]dynamic.ReferenceField) {
+func (te *DefaultTraversalEngine) addReferencesToGraph(resourceGraph *graph.ResourceGraph, references map[string][]dynamictypes.ReferenceField) {
 	for sourceResourceID, refFields := range references {
 		sourceNodeID := graph.NodeID(sourceResourceID)
 		
@@ -580,9 +580,9 @@ func (te *DefaultTraversalEngine) addReferencesToGraph(resourceGraph *graph.Reso
 			// Map dynamic reference type to graph relation type
 			var relationType graph.RelationType
 			switch refField.RefType {
-			case dynamic.RefTypeOwnerRef:
+			case dynamictypes.RefTypeOwnerRef:
 				relationType = graph.RelationTypeOwnerRef
-			case dynamic.RefTypeCustom:
+			case dynamictypes.RefTypeCustom:
 				relationType = graph.RelationTypeCustomRef
 			default:
 				relationType = graph.RelationTypeCustomRef
