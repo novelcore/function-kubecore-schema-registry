@@ -371,6 +371,17 @@ func TestReferencePatterns(t *testing.T) {
 			},
 			expected: true,
 		},
+		{
+			name:      "githubProviderRef exact pattern matches",
+			fieldName: "githubProviderRef",
+			fieldDef: &FieldDefinition{
+				Type: "object",
+				Properties: map[string]*FieldDefinition{
+					"name": {Type: "string"},
+				},
+			},
+			expected: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -407,6 +418,19 @@ func TestExtractReferenceMetadata(t *testing.T) {
 			fieldDef:       &FieldDefinition{Type: "string"},
 			expectedKind:   "KubeCluster",
 			expectedGroup:  "", // May not match group due to pattern ordering
+			expectedMethod: "pattern_match",
+		},
+		{
+			name:      "githubProviderRef object",
+			fieldName: "githubProviderRef",
+			fieldDef: &FieldDefinition{
+				Type: "object",
+				Properties: map[string]*FieldDefinition{
+					"name": {Type: "string"},
+				},
+			},
+			expectedKind:   "GithubProvider",
+			expectedGroup:  "github.platform.kubecore.io",
 			expectedMethod: "pattern_match",
 		},
 		{

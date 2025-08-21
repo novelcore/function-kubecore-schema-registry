@@ -221,19 +221,55 @@ func (d *PatternBasedDetector) detectByHeuristics(fieldName string, fieldDef *Fi
 
 // matchesPattern checks if a field name matches a pattern
 func (d *PatternBasedDetector) matchesPattern(fieldName, pattern string) bool {
+	// Enhanced debug logging for reference pattern matching
+	if strings.Contains(fieldName, "Ref") || strings.Contains(pattern, "Ref") {
+		d.logger.Debug("Reference pattern matching check",
+			"fieldName", fieldName,
+			"pattern", pattern)
+	}
+	
 	// Use glob pattern matching first
 	if matched, err := filepath.Match(pattern, fieldName); err == nil && matched {
+		// Enhanced debug logging for successful matches
+		if strings.Contains(fieldName, "Ref") || strings.Contains(pattern, "Ref") {
+			d.logger.Debug("Pattern match successful (glob)",
+				"fieldName", fieldName,
+				"pattern", pattern,
+				"matched", matched)
+		}
 		return true
 	}
 
 	// Try case-insensitive matching
 	if matched, err := filepath.Match(strings.ToLower(pattern), strings.ToLower(fieldName)); err == nil && matched {
+		// Enhanced debug logging for case-insensitive matches
+		if strings.Contains(fieldName, "Ref") || strings.Contains(pattern, "Ref") {
+			d.logger.Debug("Pattern match successful (case-insensitive)",
+				"fieldName", fieldName,
+				"pattern", pattern,
+				"matched", matched)
+		}
 		return true
 	}
 
 	// Try regex pattern if it looks like regex
 	if strings.Contains(pattern, "\\") || strings.Contains(pattern, "^") || strings.Contains(pattern, "$") {
-		return d.matchesRegex(fieldName, pattern)
+		matched := d.matchesRegex(fieldName, pattern)
+		if matched && (strings.Contains(fieldName, "Ref") || strings.Contains(pattern, "Ref")) {
+			d.logger.Debug("Pattern match successful (regex)",
+				"fieldName", fieldName,
+				"pattern", pattern,
+				"matched", matched)
+		}
+		return matched
+	}
+
+	// Enhanced debug logging for failed matches
+	if strings.Contains(fieldName, "Ref") || strings.Contains(pattern, "Ref") {
+		d.logger.Debug("Pattern match failed",
+			"fieldName", fieldName,
+			"pattern", pattern,
+			"matched", false)
 	}
 
 	return false
@@ -266,7 +302,17 @@ func (d *PatternBasedDetector) isCompatibleType(fieldDef *FieldDefinition, patte
 		return true
 	case "object":
 		// Objects can be references if they have name/namespace structure
-		return d.hasReferenceStructure(fieldDef)
+		// Be more lenient for KubeCore platform references
+		hasRefStructure := d.hasReferenceStructure(fieldDef)
+		
+		// Enhanced logging for object type compatibility
+		d.logger.Debug("Object type compatibility check",
+			"pattern", pattern.Pattern,
+			"targetKind", pattern.TargetKind,
+			"targetGroup", pattern.TargetGroup,
+			"hasReferenceStructure", hasRefStructure)
+			
+		return hasRefStructure
 	default:
 		return false
 	}

@@ -143,22 +143,52 @@ type RegistryConfig struct {
 }
 
 // Default reference patterns for detecting reference fields
+// NOTE: Order matters! More specific patterns should come first
 var DefaultReferencePatterns = []ReferencePattern{
+	// KubeCore-specific patterns (most specific)
 	{
-		Pattern:    "*Ref",
-		RefType:    RefTypeCustom,
-		Confidence: 0.9,
+		Pattern:     "githubProviderRef",
+		TargetKind:  "GithubProvider",
+		TargetGroup: "github.platform.kubecore.io",
+		RefType:     RefTypeCustom,
+		Confidence:  0.95,
 	},
 	{
-		Pattern:    "*Reference",
-		RefType:    RefTypeCustom,
-		Confidence: 0.9,
+		Pattern:     "githubProviderRef*",
+		TargetKind:  "GithubProvider",
+		TargetGroup: "github.platform.kubecore.io",
+		RefType:     RefTypeCustom,
+		Confidence:  0.9,
 	},
 	{
-		Pattern:    "*RefName",
-		RefType:    RefTypeCustom,
-		Confidence: 0.8,
+		Pattern:     "kubeClusterRef",
+		TargetKind:  "KubeCluster",
+		TargetGroup: "platform.kubecore.io",
+		RefType:     RefTypeCustom,
+		Confidence:  0.95,
 	},
+	{
+		Pattern:     "kubeClusterRef*",
+		TargetKind:  "KubeCluster",
+		TargetGroup: "platform.kubecore.io",
+		RefType:     RefTypeCustom,
+		Confidence:  0.9,
+	},
+	{
+		Pattern:     "kubEnvRef",
+		TargetKind:  "KubEnv",
+		TargetGroup: "platform.kubecore.io",
+		RefType:     RefTypeCustom,
+		Confidence:  0.95,
+	},
+	{
+		Pattern:     "kubEnvRef*",
+		TargetKind:  "KubEnv",
+		TargetGroup: "platform.kubecore.io",
+		RefType:     RefTypeCustom,
+		Confidence:  0.9,
+	},
+	// Kubernetes core resource patterns (specific)
 	{
 		Pattern:     "configMapRef*",
 		TargetKind:  "ConfigMap",
@@ -192,26 +222,21 @@ var DefaultReferencePatterns = []ReferencePattern{
 		RefType:    RefTypeCustom,
 		Confidence: 0.85,
 	},
+	// Generic patterns (least specific, catch-all)
 	{
-		Pattern:     "kubeClusterRef*",
-		TargetKind:  "KubeCluster",
-		TargetGroup: "platform.kubecore.io",
-		RefType:     RefTypeCustom,
-		Confidence:  0.9,
+		Pattern:    "*Ref",
+		RefType:    RefTypeCustom,
+		Confidence: 0.9,
 	},
 	{
-		Pattern:     "kubEnvRef*",
-		TargetKind:  "KubEnv",
-		TargetGroup: "platform.kubecore.io",
-		RefType:     RefTypeCustom,
-		Confidence:  0.9,
+		Pattern:    "*Reference",
+		RefType:    RefTypeCustom,
+		Confidence: 0.9,
 	},
 	{
-		Pattern:     "githubProviderRef*",
-		TargetKind:  "GithubProvider",
-		TargetGroup: "github.platform.kubecore.io",
-		RefType:     RefTypeCustom,
-		Confidence:  0.9,
+		Pattern:    "*RefName",
+		RefType:    RefTypeCustom,
+		Confidence: 0.8,
 	},
 }
 
