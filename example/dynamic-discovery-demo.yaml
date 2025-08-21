@@ -1,0 +1,200 @@
+# Dynamic Discovery Demonstration
+# This example shows how to configure and test the dynamic discovery functionality
+
+---
+# Example environment configuration for dynamic discovery
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: schema-registry-config
+  namespace: crossplane-system
+data:
+  # Registry operation mode
+  REGISTRY_MODE: "hybrid"  # Use hybrid for safety, dynamic for full discovery
+  
+  # API group patterns for CRD discovery
+  API_GROUP_PATTERNS: "*.kubecore.io,platform.kubecore.io,github.platform.kubecore.io"
+  
+  # Discovery timeout
+  DISCOVERY_TIMEOUT: "10s"
+  
+  # Caching configuration
+  CACHE_ENABLED: "true"
+  CACHE_TTL: "5m"
+  
+  # Fallback configuration
+  FALLBACK_ENABLED: "true"
+  
+  # Reference detection patterns (optional custom patterns)
+  REF_PATTERNS: "*Ref,*Reference,*RefName"
+  
+  # Logging level
+  LOG_LEVEL: "info"
+
+---
+# Example Function deployment with dynamic discovery enabled
+apiVersion: pkg.crossplane.io/v1beta1
+kind: Function
+metadata:
+  name: function-kubecore-schema-registry-dynamic
+spec:
+  package: ghcr.io/kubecore/functions/function-kubecore-schema-registry:latest
+  packagePullPolicy: Always
+  runtime:
+    base:
+      image: "scratch"
+    envFrom:
+      - configMapRef:
+          name: schema-registry-config
+    env:
+      # Override specific settings
+      - name: REGISTRY_MODE
+        value: "dynamic"
+      - name: LOG_LEVEL
+        value: "debug"
+
+---
+# Example Composition that uses dynamic discovery
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: dynamic-discovery-demo
+  labels:
+    provider: kubecore
+    service: platform
+spec:
+  writeConnectionSecretsToNamespace: crossplane-system
+  
+  compositeTypeRef:
+    apiVersion: platform.kubecore.io/v1alpha1
+    kind: XPlatformStack
+  
+  functions:
+    - name: schema-registry-discovery
+      type: function
+      step: discovery
+      functionRef:
+        name: function-kubecore-schema-registry-dynamic
+      input:
+        apiVersion: template.kubecore.io/v1beta1
+        kind: Input
+        # Enable Phase 2 features for enhanced discovery
+        phase2Features: true
+        
+        # Configure discovery parameters
+        fetchResources:
+          - kind: KubeCluster
+            apiVersion: platform.kubecore.io/v1alpha1
+            matchLabels:
+              environment: production
+            
+          - kind: GitHubProject
+            apiVersion: github.platform.kubecore.io/v1alpha1
+            
+          - kind: KubEnv
+            apiVersion: platform.kubecore.io/v1alpha1
+            matchLabels:
+              stack: platform
+        
+        # Optional: Override timeout for this specific call
+        fetchTimeout: "15s"
+        maxConcurrentFetches: 5
+
+---
+# Example XR that triggers dynamic discovery
+apiVersion: platform.kubecore.io/v1alpha1
+kind: XPlatformStack
+metadata:
+  name: example-stack-with-discovery
+  labels:
+    environment: development
+    discovery-mode: dynamic
+spec:
+  # The schema registry function will dynamically discover
+  # CRDs matching the configured patterns and detect
+  # reference fields automatically
+  
+  parameters:
+    clusterName: "demo-cluster"
+    environment: "development"
+    region: "us-east-1"
+    
+  # This will be processed by the dynamic discovery
+  fetchResources:
+    - kind: KubeCluster
+      apiVersion: platform.kubecore.io/v1alpha1
+      name: demo-cluster
+      
+    - kind: GitHubProject
+      apiVersion: github.platform.kubecore.io/v1alpha1
+      matchLabels:
+        team: platform
+        
+    - kind: KubEnv
+      apiVersion: platform.kubecore.io/v1alpha1
+      matchLabels:
+        cluster: demo-cluster
+
+---
+# Example monitoring ConfigMap to track discovery performance
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: discovery-monitoring-queries
+  namespace: crossplane-system
+data:
+  # Prometheus queries for monitoring (if metrics are implemented)
+  discovery_duration.promql: |
+    histogram_quantile(0.95, 
+      rate(kubecore_discovery_duration_seconds_bucket[5m])
+    )
+  
+  discovery_success_rate.promql: |
+    rate(kubecore_discovery_success_total[5m]) / 
+    rate(kubecore_discovery_attempts_total[5m])
+  
+  cache_hit_ratio.promql: |
+    rate(kubecore_cache_hits_total[5m]) / 
+    rate(kubecore_cache_requests_total[5m])
+
+---
+# Example test resource to validate dynamic discovery
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: test-dynamic-discovery
+  namespace: crossplane-system
+spec:
+  template:
+    spec:
+      serviceAccountName: crossplane
+      containers:
+      - name: test-discovery
+        image: curlimages/curl:latest
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "Testing Dynamic Discovery Functionality..."
+          
+          # Check if function is running
+          echo "Checking function status..."
+          
+          # Create test XR
+          cat <<EOF | kubectl apply -f -
+          apiVersion: platform.kubecore.io/v1alpha1
+          kind: XPlatformStack
+          metadata:
+            name: discovery-test-$(date +%s)
+            labels:
+              test: dynamic-discovery
+          spec:
+            parameters:
+              test: true
+          EOF
+          
+          echo "Test XR created. Check logs with:"
+          echo "kubectl logs -n crossplane-system -l app=crossplane -f"
+          echo "kubectl get xplatformstacks"
+          
+      restartPolicy: OnFailure

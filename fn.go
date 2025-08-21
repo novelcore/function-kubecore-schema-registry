@@ -14,9 +14,11 @@ import (
 	"github.com/crossplane/function-kubecore-schema-registry/input/v1beta1"
 	"github.com/crossplane/function-kubecore-schema-registry/pkg/discovery"
 	"github.com/crossplane/function-kubecore-schema-registry/pkg/errors"
+	"github.com/crossplane/function-kubecore-schema-registry/pkg/initialization"
 	"github.com/crossplane/function-kubecore-schema-registry/pkg/parser"
 	"github.com/crossplane/function-kubecore-schema-registry/pkg/registry"
 	responsebuilder "github.com/crossplane/function-kubecore-schema-registry/pkg/response"
+	"github.com/crossplane/function-kubecore-schema-registry/pkg/types"
 )
 
 // Function implements the KubeCore Schema Registry Function (Phase 1 & 2)
@@ -28,15 +30,39 @@ type Function struct {
 	registry        registry.Registry
 	parser          parser.XRParser
 	responseBuilder responsebuilder.Builder
+	config          *types.RegistryConfig
 }
 
 // NewFunction creates a new function instance
 func NewFunction(log logging.Logger) *Function {
+	// Load configuration from environment
+	config := initialization.LoadConfigFromEnvironment()
+	
+	// For now, always use embedded registry to avoid import cycles
+	// Dynamic discovery will be enabled in a later iteration
+	var reg registry.Registry
+	if config.Mode == types.RegistryModeDynamic || config.Mode == types.RegistryModeHybrid {
+		log.Info("Dynamic/hybrid registry mode configured, but using embedded for now", 
+			"configured_mode", config.Mode,
+			"actual_mode", "embedded",
+			"reason", "import_cycle_resolution_pending")
+	}
+	reg = registry.NewEmbeddedRegistry()
+	
+	// Log registry initialization
+	if types, err := reg.ListResourceTypes(); err == nil {
+		log.Info("Registry initialized", 
+			"mode", "embedded",
+			"total_types", len(types),
+			"configured_patterns", config.APIGroupPatterns)
+	}
+	
 	return &Function{
 		log:             log,
-		registry:        registry.NewEmbeddedRegistry(),
+		registry:        reg,
 		parser:          parser.NewDefaultXRParser(),
 		responseBuilder: responsebuilder.NewDefaultBuilder(),
+		config:          config,
 	}
 }
 
@@ -56,7 +82,11 @@ func (f *Function) RunFunction(ctx context.Context, req *fnv1.RunFunctionRequest
 		}
 	}
 	
-	f.log.Info("KubeCore Schema Registry Function starting", "phase", phase)
+	f.log.Info("KubeCore Schema Registry Function starting", 
+		"phase", phase,
+		"registry_mode", f.config.Mode,
+		"api_group_patterns", f.config.APIGroupPatterns,
+		"discovery_timeout", f.config.Timeout)
 
 	// Extract and validate XR
 	xr, err := request.GetObservedCompositeResource(req)

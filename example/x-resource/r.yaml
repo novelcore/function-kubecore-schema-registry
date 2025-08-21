@@ -1,108 +1,83 @@
-# Test Case 1: Basic Dual Resource Fetch (Primary Success Case)
+# Test Case 1: Phase 2 Comprehensive Test - All Features
 apiVersion: test.kubecore.platform.io/v1alpha1
-kind: SchemaRegistryTest
+kind: SchemaRegistryPhase2Test
 metadata:
-  name: phase1-dual-resource-test
+  name: phase2-comprehensive-test
   namespace: default
 spec:
-  testName: phase1-dual-github
-  description: "Test fetching both GitHubProject and GithubProvider resources successfully"
-
-# ---
-# # Test Case 2: GitHubProject Only (Isolation Test)
-# apiVersion: test.kubecore.platform.io/v1alpha1
-# kind: SchemaRegistryTest
-# metadata:
-#   name: phase1-project-only-test
-#   namespace: default
-# spec:
-#   testName: phase1-project-only
-#   description: "Test fetching only GitHubProject resource to isolate functionality"
-
-# ---
-# # Test Case 3: GithubProvider Only (Isolation Test)  
-# apiVersion: test.kubecore.platform.io/v1alpha1
-# kind: SchemaRegistryTest
-# metadata:
-#   name: phase1-provider-only-test
-#   namespace: default
-# spec:
-#   testName: phase1-provider-only
-#   description: "Test fetching only GithubProvider resource to isolate functionality"
-
-# ---
-# # Test Case 4: Partial Failure Test (Error Recovery)
-# apiVersion: test.kubecore.platform.io/v1alpha1
-# kind: SchemaRegistryTest
-# metadata:
-#   name: phase1-partial-failure-test
-#   namespace: default
-# spec:
-#   testName: phase1-partial-failure
-#   description: "Test function behavior with one valid and one invalid resource"
-
-# ---
-# # Test Case 5: Namespace Validation Test
-# apiVersion: test.kubecore.platform.io/v1alpha1
-# kind: SchemaRegistryTest
-# metadata:
-#   name: phase1-namespace-test
-#   namespace: custom-test-ns
-# spec:
-#   testName: phase1-namespace-validation
-#   description: "Test resource fetching across different namespaces and custom XR namespace"
-
-# ---
-# # Test Case 6: Performance Test (Multiple Resources)
-# apiVersion: test.kubecore.platform.io/v1alpha1
-# kind: SchemaRegistryTest
-# metadata:
-#   name: phase1-performance-test
-#   namespace: default
-# spec:
-#   testName: phase1-performance
-#   description: "Test function performance with multiple resource fetch requests"
-
-# ---
-# # Test Case 7: Context Structure Validation
-# apiVersion: test.kubecore.platform.io/v1alpha1
-# kind: SchemaRegistryTest
-# metadata:
-#   name: phase1-context-validation-test
-#   namespace: default
-# spec:
-#   testName: phase1-context-validation
-#   description: "Test to validate exact context structure and template compatibility"
-
-# ---
-# # Test Case 8: Resource Not Found Test (Full Failure)
-# apiVersion: test.kubecore.platform.io/v1alpha1
-# kind: SchemaRegistryTest
-# metadata:
-#   name: phase1-not-found-test
-#   namespace: default
-# spec:
-#   testName: phase1-not-found
-#   description: "Test function behavior when all requested resources do not exist"
-
-# ---
-# # Test Case 9: Timeout and Concurrent Fetch Test
-# apiVersion: test.kubecore.platform.io/v1alpha1
-# kind: SchemaRegistryTest
-# metadata:
-#   name: phase1-timeout-test
-#   namespace: default
-# spec:
-#   testName: phase1-timeout-concurrent
-#   description: "Test function timeout handling and concurrent fetch limits"
-
-# ---
-# # Test Case 10: Legacy Context Key Compatibility Test
-# apiVersion: test.kubecore.platform.io/v1alpha1
-# kind: SchemaRegistryTest
-# metadata:
-#   name: phase1-legacy-context-test
-#   namespace: default
-# spec:
-#   testName: phase1-legacy-context
-#   description: "Test backward compatibility with legacy context key 'schemaRegistryResults'"
+  testName: phase2-comprehensive
+  description: "Comprehensive test covering Phase 2 label-based and expression-based discovery with backward compatibility"
+  phase2Enabled: true
+  testScenario: "comprehensive"
+---
+# Test Case 2: Backward Compatibility Test - Phase 1 Features Only
+apiVersion: test.kubecore.platform.io/v1alpha1
+kind: SchemaRegistryPhase2Test
+metadata:
+  name: phase1-backward-compatibility-test
+  namespace: default
+spec:
+  testName: phase1-backward-compatibility
+  description: "Test backward compatibility - Phase 1 direct resource fetch without Phase 2 features"
+  phase2Enabled: false
+  testScenario: "backward-compatibility"
+---
+# Test Case 3: Label-Based Discovery Focus Test
+apiVersion: test.kubecore.platform.io/v1alpha1
+kind: SchemaRegistryPhase2Test
+metadata:
+  name: phase2-label-discovery-test
+  namespace: default
+spec:
+  testName: phase2-label-discovery
+  description: "Focus test for Phase 2 label-based resource discovery with multiple operators and constraints"
+  phase2Enabled: true
+  testScenario: "label-discovery"
+---
+# Test Case 4: Expression-Based Discovery Focus Test
+apiVersion: test.kubecore.platform.io/v1alpha1
+kind: SchemaRegistryPhase2Test
+metadata:
+  name: phase2-expression-discovery-test
+  namespace: default
+spec:
+  testName: phase2-expression-discovery
+  description: "Focus test for Phase 2 expression-based resource discovery with all operators"
+  phase2Enabled: true
+  testScenario: "expression-discovery"
+---
+# Test Case 5: Advanced Features Test
+apiVersion: test.kubecore.platform.io/v1alpha1
+kind: SchemaRegistryPhase2Test
+metadata:
+  name: phase2-advanced-features-test
+  namespace: default
+spec:
+  testName: phase2-advanced-features
+  description: "Test advanced Phase 2 features: namespace selection, sorting, constraints, batch optimization"
+  phase2Enabled: true
+  testScenario: "advanced-features"
+---
+# Test Case 6: Error Handling and Edge Cases Test
+apiVersion: test.kubecore.platform.io/v1alpha1
+kind: SchemaRegistryPhase2Test
+metadata:
+  name: phase2-error-handling-test
+  namespace: default
+spec:
+  testName: phase2-error-handling
+  description: "Test Phase 2 error handling: constraint violations, invalid selectors, missing resources"
+  phase2Enabled: true
+  testScenario: "error-handling"
+---
+# Test Case 7: Performance and Scalability Test
+apiVersion: test.kubecore.platform.io/v1alpha1
+kind: SchemaRegistryPhase2Test
+metadata:
+  name: phase2-performance-test
+  namespace: default
+spec:
+  testName: phase2-performance
+  description: "Test Phase 2 performance characteristics and scalability with large result sets"
+  phase2Enabled: true
+  testScenario: "performance"
