@@ -161,7 +161,7 @@ func (f *Function) RunFunction(ctx context.Context, req *fnv1.RunFunctionRequest
 		"phase3Enabled", phase3Enabled)
 
 	// Create discovery engine with Phase 2/3 capabilities if enabled
-	discoveryEngine, err := f.createDiscoveryEngine(timeout, maxConcurrent, phase2Enabled, phase3Enabled)
+	discoveryEngine, err := f.createDiscoveryEngine(timeout, maxConcurrent, phase2Enabled, phase3Enabled, in.TraversalConfig)
 	if err != nil {
 		response.Fatal(rsp, errors.Wrap(err, "failed to create discovery engine"))
 		return rsp, nil
@@ -217,7 +217,7 @@ func (f *Function) RunFunction(ctx context.Context, req *fnv1.RunFunctionRequest
 }
 
 // createDiscoveryEngine creates a Kubernetes discovery engine
-func (f *Function) createDiscoveryEngine(timeout time.Duration, maxConcurrent int, phase2Enabled bool, phase3Enabled bool) (discovery.Engine, error) {
+func (f *Function) createDiscoveryEngine(timeout time.Duration, maxConcurrent int, phase2Enabled bool, phase3Enabled bool, traversalConfig *v1beta1.TraversalConfig) (discovery.Engine, error) {
 	// Get in-cluster configuration
 	config, err := rest.InClusterConfig()
 	if err != nil {
@@ -234,7 +234,7 @@ func (f *Function) createDiscoveryEngine(timeout time.Duration, maxConcurrent in
 			Phase2Enabled:         true, // Phase 3 builds on Phase 2
 		}
 
-		engine, err := discovery.NewEnhancedDiscoveryEngine(config, f.registry, discoveryContext, f.log)
+		engine, err := discovery.NewEnhancedDiscoveryEngine(config, f.registry, discoveryContext, traversalConfig, f.log)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to create Phase 3 discovery engine")
 		}

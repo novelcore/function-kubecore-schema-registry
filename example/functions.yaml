@@ -10,11 +10,13 @@ spec:
   # Production package reference (update with actual registry and version)
   package: ghcr.io/novelcore/function-kubecore-schema-registry:v0.0.0-20250821061334-63685c3c92f3
 ---
-# Production Deployment Runtime Configuration
+# Production Deployment Runtime Configuration - Phase 3 Enhanced
 apiVersion: pkg.crossplane.io/v1beta1
 kind: DeploymentRuntimeConfig
 metadata:
   name: kubecore-schema-registry-config
+  annotations:
+    meta.crossplane.io/description: "Production configuration with Phase 3 transitive discovery"
 spec:
   deploymentTemplate:
     spec:
@@ -24,7 +26,7 @@ spec:
           containers:
           - name: package-runtime
             env:
-            # Dynamic Resource Discovery Configuration
+            # Phase 3 Enhanced Discovery Configuration
             - name: REGISTRY_MODE
               value: "hybrid"                    # hybrid|dynamic|embedded
             - name: API_GROUP_PATTERNS
@@ -41,16 +43,31 @@ spec:
               value: "info"                     # info|debug|warn|error
             - name: REF_PATTERNS
               value: "*Ref,*Reference,kubeClusterRef*,kubEnvRef*,githubProviderRef*"
+            # Phase 3 Traversal Configuration
+            - name: ENABLE_TRANSITIVE_DISCOVERY
+              value: "true"                     # Enable Phase 3 capabilities
+            - name: MAX_TRAVERSAL_DEPTH
+              value: "3"                        # Maximum traversal depth
+            - name: TRAVERSAL_TIMEOUT
+              value: "10s"                      # Total traversal timeout
+            - name: PLATFORM_SCOPE_ONLY
+              value: "true"                     # Strict platform boundary
+            - name: EXCLUDED_KINDS
+              value: "Secret,ConfigMap,ServiceAccount,ClusterSecretStore,PersistentVolumeClaim"
             # Performance Configuration
             - name: MAX_CONCURRENT_FETCHES
               value: "10"
             - name: FETCH_TIMEOUT
               value: "30s"
+            - name: BATCH_SIZE
+              value: "10"                       # Resources per batch
+            - name: MAX_CONCURRENT_BATCHES
+              value: "3"                        # Concurrent batch limit
             # Security and Resource Configuration
             resources:
               limits:
                 cpu: 500m
-                memory: 512Mi
+                memory: 512Mi                   # Supports up to 100 resources in graph
               requests:
                 cpu: 100m
                 memory: 128Mi
@@ -63,11 +80,13 @@ spec:
                 - ALL
               readOnlyRootFilesystem: true
 ---
-# Alternative Development Configuration
+# Development Configuration - Phase 3 Testing
 apiVersion: pkg.crossplane.io/v1beta1
 kind: DeploymentRuntimeConfig  
 metadata:
   name: kubecore-schema-registry-dev
+  annotations:
+    meta.crossplane.io/description: "Development configuration for testing Phase 3 features"
 spec:
   deploymentTemplate:
     spec:
@@ -88,6 +107,19 @@ spec:
               value: "debug"                    # Verbose logging for development
             - name: CACHE_TTL
               value: "1m"                       # Shorter cache for testing
+            # Phase 3 Development Settings
+            - name: ENABLE_TRANSITIVE_DISCOVERY
+              value: "true"                     # Enable Phase 3 for testing
+            - name: MAX_TRAVERSAL_DEPTH
+              value: "5"                        # Deeper traversal for dev
+            - name: TRAVERSAL_TIMEOUT
+              value: "30s"                      # Longer timeout for debugging
+            - name: CYCLE_DETECTION_ENABLED
+              value: "true"                     # Enable cycle detection
+            - name: ENABLE_METRICS
+              value: "true"                     # Detailed performance metrics
+            - name: PLATFORM_SCOPE_ONLY
+              value: "false"                    # Allow broader scope for testing
             # Development Resources
             resources:
               limits:
@@ -110,38 +142,233 @@ spec:
   runtimeConfigRef:
     name: kubecore-schema-registry-config
 ---
-# Phase 1 Input Configuration
+# Phase 1 Basic Input Configuration
 apiVersion: registry.fn.crossplane.io/v1beta1
 kind: Input
 metadata:
   name: schema-registry-phase1
-fetchResources:
-  - into: "project"
-    name: "example-project"
-    apiVersion: "github.platform.kubecore.io/v1alpha1"
-    kind: "GitHubProject"
-    optional: false
-  - into: "infra"
-    name: "example-infra"
-    apiVersion: "github.platform.kubecore.io/v1alpha1"
-    kind: "GitHubInfra"
-    optional: false
-  - into: "system" 
-    name: "example-system"
-    apiVersion: "github.platform.kubecore.io/v1alpha1"
-    kind: "GitHubSystem"
-    optional: false
-  - into: "kubenv"
-    name: "example-kubenv"
-    namespace: "default"
-    apiVersion: "platform.kubecore.io/v1alpha1"
-    kind: "KubEnv"
-    optional: false
-  - into: "kubeapp"
-    name: "example-kubeapp"
-    namespace: "default"
-    apiVersion: "platform.kubecore.io/v1alpha1"
-    kind: "KubeApp"
-    optional: false
-fetchTimeout: "10s"
-maxConcurrentFetches: 5
+  annotations:
+    meta.crossplane.io/description: "Basic Phase 1 direct resource fetching"
+spec:
+  fetchResources:
+    - into: "project"
+      name: "example-project"
+      apiVersion: "github.platform.kubecore.io/v1alpha1"
+      kind: "GitHubProject"
+      optional: false
+    - into: "infra"
+      name: "example-infra"
+      apiVersion: "github.platform.kubecore.io/v1alpha1"
+      kind: "GitHubInfra"
+      optional: false
+    - into: "system" 
+      name: "example-system"
+      apiVersion: "github.platform.kubecore.io/v1alpha1"
+      kind: "GitHubSystem"
+      optional: false
+    - into: "kubenv"
+      name: "example-kubenv"
+      namespace: "default"
+      apiVersion: "platform.kubecore.io/v1alpha1"
+      kind: "KubEnv"
+      optional: false
+    - into: "kubeapp"
+      name: "example-kubeapp"
+      namespace: "default"
+      apiVersion: "platform.kubecore.io/v1alpha1"
+      kind: "KubeApp"
+      optional: false
+  fetchTimeout: "10s"
+  maxConcurrentFetches: 5
+---
+# Phase 3 Transitive Discovery - Complete Application Topology
+apiVersion: registry.fn.crossplane.io/v1beta1
+kind: Input
+metadata:
+  name: schema-registry-phase3-app-topology
+  annotations:
+    meta.crossplane.io/description: "Discover complete application topology with platform scope"
+spec:
+  phase3Features: true
+  fetchResources:
+    - into: "appTopology"
+      name: "art-api"
+      namespace: "production"
+      apiVersion: "app.kubecore.io/v1alpha1"
+      kind: "App"
+      optional: false
+  traversalConfig:
+    enabled: true
+    maxDepth: -1                          # Unlimited depth traversal
+    maxResources: 100                     # Safety limit
+    timeout: "30s"
+    direction: "bidirectional"            # Find both dependencies and dependents
+    scopeFilter:
+      platformOnly: true                  # CRITICAL: Only platform resources
+      includeAPIGroups:
+        - "*.kubecore.io"
+        - "platform.kubecore.io"
+        - "github.platform.kubecore.io"
+        - "app.kubecore.io"
+      excludeKinds:                       # Infrastructure resources excluded
+        - "Secret"
+        - "ConfigMap"
+        - "ServiceAccount"
+        - "ClusterSecretStore"
+        - "PersistentVolumeClaim"
+      crossNamespaceEnabled: true
+    batchConfig:
+      enabled: true
+      batchSize: 10
+      maxConcurrentBatches: 3
+      sameDepthBatching: true
+    cacheConfig:
+      enabled: true
+      ttl: "5m"
+      maxSize: 1000
+      strategy: "lru"
+    referenceResolution:
+      enableDynamicCRDs: true
+      followOwnerReferences: true
+      followCustomReferences: true
+      skipMissingReferences: true
+      minConfidenceThreshold: 0.5
+    cycleHandling:
+      detectionEnabled: true
+      onCycleDetected: "continue"          # Continue traversal on cycle detection
+      maxCycles: 10
+      reportCycles: true
+    performance:
+      maxConcurrentRequests: 10
+      requestTimeout: "2s"
+      enableMetrics: true
+      resourceDeduplication: true
+      memoryLimits:
+        maxGraphSize: 52428800            # 50MB graph limit
+        maxCacheSize: 10485760            # 10MB cache limit
+        gcThreshold: 83886080             # 80MB GC threshold
+  fetchTimeout: "5s"
+  maxConcurrentFetches: 10
+---
+# Phase 3 Impact Analysis - Reverse Discovery
+apiVersion: registry.fn.crossplane.io/v1beta1
+kind: Input
+metadata:
+  name: schema-registry-phase3-impact-analysis
+  annotations:
+    meta.crossplane.io/description: "Impact analysis - what depends on this resource"
+spec:
+  phase3Features: true
+  fetchResources:
+    - into: "impactAnalysis"
+      name: "demo-project"
+      namespace: "platform"
+      apiVersion: "github.platform.kubecore.io/v1alpha1"
+      kind: "GitHubProject"
+      optional: false
+  traversalConfig:
+    enabled: true
+    maxDepth: 3                           # Limited depth for impact analysis
+    maxResources: 50                      # Focused analysis
+    timeout: "10s"
+    direction: "reverse"                  # Find what depends on this resource
+    scopeFilter:
+      platformOnly: true                  # Strict platform scope
+      includeAPIGroups:
+        - "*.kubecore.io"
+      excludeKinds:
+        - "Secret"
+        - "ConfigMap"
+        - "ServiceAccount"
+        - "PersistentVolumeClaim"
+      crossNamespaceEnabled: true
+    cycleHandling:
+      detectionEnabled: true
+      onCycleDetected: "stop"              # Stop on cycle for impact analysis
+    performance:
+      enableMetrics: true
+      resourceDeduplication: true
+  fetchTimeout: "3s"
+  maxConcurrentFetches: 5
+---
+# Phase 3 Platform Infrastructure Chain Discovery
+apiVersion: registry.fn.crossplane.io/v1beta1
+kind: Input
+metadata:
+  name: schema-registry-phase3-platform-chain
+  annotations:
+    meta.crossplane.io/description: "Discover platform infrastructure dependency chain"
+spec:
+  phase3Features: true
+  fetchResources:
+    - into: "platformChain"
+      name: "demo-kubesystem"
+      namespace: "crossplane-system"
+      apiVersion: "platform.kubecore.io/v1alpha1"
+      kind: "KubeSystem"
+      optional: false
+  traversalConfig:
+    enabled: true
+    maxDepth: 5                           # Deep platform traversal
+    maxResources: 75
+    timeout: "15s"
+    direction: "forward"                  # Follow platform references down
+    scopeFilter:
+      platformOnly: true                  # CRITICAL: Platform resources only
+      includeAPIGroups:
+        - "platform.kubecore.io"           # Only core platform API group
+      excludeKinds:                       # Exclude ALL infrastructure
+        - "Secret"
+        - "ConfigMap"
+        - "ServiceAccount"
+        - "ClusterSecretStore"
+        - "PersistentVolumeClaim"
+        - "PersistentVolume"
+        - "StorageClass"
+        - "Pod"
+        - "Service"
+        - "Deployment"
+      crossNamespaceEnabled: false        # Stay within namespace
+    batchConfig:
+      enabled: true
+      batchSize: 5                        # Smaller batches for platform resources
+      sameDepthBatching: true
+    referenceResolution:
+      followOwnerReferences: false        # Don't follow Kubernetes owner refs
+      followCustomReferences: true        # Only follow platform custom refs
+      minConfidenceThreshold: 0.8         # High confidence for platform refs
+    cycleHandling:
+      detectionEnabled: true
+      onCycleDetected: "fail"              # Fail on cycles in platform chain
+    performance:
+      maxConcurrentRequests: 5            # Conservative for platform discovery
+      enableMetrics: true
+  fetchTimeout: "5s"
+  maxConcurrentFetches: 3
+---
+# Phase 2 Label-Based Discovery (Backward Compatibility)
+apiVersion: registry.fn.crossplane.io/v1beta1
+kind: Input
+metadata:
+  name: schema-registry-phase2-label-discovery
+  annotations:
+    meta.crossplane.io/description: "Phase 2 label-based resource discovery"
+spec:
+  phase2Features: true
+  fetchResources:
+    - into: "projectResources"
+      apiVersion: "github.platform.kubecore.io/v1alpha1"
+      kind: "GitHubProject"
+      matchType: "label"
+      selector:
+        labelSelector:
+          matchLabels:
+            project: "demo"
+            environment: "production"
+      strategy:
+        limit: 10
+        sortBy: "metadata.name"
+        sortOrder: "ascending"
+      optional: true
+  fetchTimeout: "15s"
+  maxConcurrentFetches: 8

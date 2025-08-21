@@ -1,83 +1,84 @@
-# Test Case 1: Phase 2 Comprehensive Test - All Features
+# Test Case 1: Phase 3 Complete Application Topology Discovery
 apiVersion: test.kubecore.platform.io/v1alpha1
-kind: SchemaRegistryPhase2Test
+kind: SchemaRegistryPhase3Test
 metadata:
-  name: phase2-comprehensive-test
+  name: phase3-complete-topology-test
   namespace: default
 spec:
-  testName: phase2-comprehensive
-  description: "Comprehensive test covering Phase 2 label-based and expression-based discovery with backward compatibility"
-  phase2Enabled: true
-  testScenario: "comprehensive"
+  testName: phase3-complete-topology
+  description: "Test complete application topology discovery with transitive relationships and platform security boundaries"
+  phase3Enabled: true
+  testScenario: "complete-topology"
+  rootResource:
+    name: art-api
+    namespace: default
+    apiVersion: app.kubecore.io/v1alpha1
+    kind: App
 ---
-# Test Case 2: Backward Compatibility Test - Phase 1 Features Only
+# Test Case 2: Phase 3 Platform Security Boundary Enforcement 
 apiVersion: test.kubecore.platform.io/v1alpha1
-kind: SchemaRegistryPhase2Test
+kind: SchemaRegistryPhase3Test
 metadata:
-  name: phase1-backward-compatibility-test
+  name: phase3-security-boundary-test
   namespace: default
 spec:
-  testName: phase1-backward-compatibility
-  description: "Test backward compatibility - Phase 1 direct resource fetch without Phase 2 features"
-  phase2Enabled: false
-  testScenario: "backward-compatibility"
+  testName: phase3-security-boundary
+  description: "Test platform security boundary enforcement - only *.kubecore.io resources allowed"
+  phase3Enabled: true
+  testScenario: "security-boundary"
+  rootResource:
+    name: demo-cluster
+    namespace: test
+    apiVersion: platform.kubecore.io/v1alpha1
+    kind: KubeCluster
 ---
-# Test Case 3: Label-Based Discovery Focus Test
+# Test Case 3: Phase 3 Cycle Detection Test
 apiVersion: test.kubecore.platform.io/v1alpha1
-kind: SchemaRegistryPhase2Test
+kind: SchemaRegistryPhase3Test
 metadata:
-  name: phase2-label-discovery-test
+  name: phase3-cycle-detection-test
   namespace: default
 spec:
-  testName: phase2-label-discovery
-  description: "Focus test for Phase 2 label-based resource discovery with multiple operators and constraints"
-  phase2Enabled: true
-  testScenario: "label-discovery"
+  testName: phase3-cycle-detection
+  description: "Test cycle detection in bidirectional resource traversal with DFS algorithm"
+  phase3Enabled: true
+  testScenario: "cycle-detection"
+  rootResource:
+    name: demo-kubesystem
+    namespace: test
+    apiVersion: platform.kubecore.io/v1alpha1
+    kind: KubeSystem
 ---
-# Test Case 4: Expression-Based Discovery Focus Test
+# Test Case 4: Phase 3 Performance Optimization Test
 apiVersion: test.kubecore.platform.io/v1alpha1
-kind: SchemaRegistryPhase2Test
+kind: SchemaRegistryPhase3Test
 metadata:
-  name: phase2-expression-discovery-test
+  name: phase3-performance-test
   namespace: default
 spec:
-  testName: phase2-expression-discovery
-  description: "Focus test for Phase 2 expression-based resource discovery with all operators"
-  phase2Enabled: true
-  testScenario: "expression-discovery"
+  testName: phase3-performance-optimization
+  description: "Test performance optimization features: batching, caching, concurrent processing"
+  phase3Enabled: true
+  testScenario: "performance-optimization"
+  rootResource:
+    name: demo-dev
+    namespace: test
+    apiVersion: platform.kubecore.io/v1alpha1
+    kind: KubEnv
 ---
-# Test Case 5: Advanced Features Test
+# Test Case 5: Phase 3 Reference Resolution Test
 apiVersion: test.kubecore.platform.io/v1alpha1
-kind: SchemaRegistryPhase2Test
+kind: SchemaRegistryPhase3Test
 metadata:
-  name: phase2-advanced-features-test
+  name: phase3-reference-resolution-test
   namespace: default
 spec:
-  testName: phase2-advanced-features
-  description: "Test advanced Phase 2 features: namespace selection, sorting, constraints, batch optimization"
-  phase2Enabled: true
-  testScenario: "advanced-features"
----
-# Test Case 6: Error Handling and Edge Cases Test
-apiVersion: test.kubecore.platform.io/v1alpha1
-kind: SchemaRegistryPhase2Test
-metadata:
-  name: phase2-error-handling-test
-  namespace: default
-spec:
-  testName: phase2-error-handling
-  description: "Test Phase 2 error handling: constraint violations, invalid selectors, missing resources"
-  phase2Enabled: true
-  testScenario: "error-handling"
----
-# Test Case 7: Performance and Scalability Test
-apiVersion: test.kubecore.platform.io/v1alpha1
-kind: SchemaRegistryPhase2Test
-metadata:
-  name: phase2-performance-test
-  namespace: default
-spec:
-  testName: phase2-performance
-  description: "Test Phase 2 performance characteristics and scalability with large result sets"
-  phase2Enabled: true
-  testScenario: "performance"
+  testName: phase3-reference-resolution
+  description: "Test multiple reference resolution types: owner refs, custom refs, cross-namespace"
+  phase3Enabled: true
+  testScenario: "reference-resolution"
+  rootResource:
+    name: demo-project
+    namespace: test
+    apiVersion: github.platform.kubecore.io/v1alpha1
+    kind: GitHubProject

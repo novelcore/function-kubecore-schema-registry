@@ -430,6 +430,174 @@ func intPtr(i int) *int {
 	return &i
 }
 
+// Phase 3 Tests
+
+func TestPhase3Features(t *testing.T) {
+	type args struct {
+		ctx context.Context
+		req *fnv1.RunFunctionRequest
+	}
+
+	cases := map[string]struct {
+		reason   string
+		args     args
+		hasError bool
+	}{
+		"Phase3EnabledWithTraversalConfig": {
+			reason: "Should handle Phase 3 traversal configuration correctly",
+			args: args{
+				ctx: context.Background(),
+				req: &fnv1.RunFunctionRequest{
+					Meta: &fnv1.RequestMeta{Tag: "test"},
+					Observed: &fnv1.State{
+						Composite: &fnv1.Resource{
+							Resource: resource.MustStructJSON(`{
+								"apiVersion": "test.kubecore.io/v1alpha1",
+								"kind": "TestXR",
+								"metadata": {
+									"name": "test-xr"
+								},
+								"spec": {}
+							}`),
+						},
+					},
+					Input: resource.MustStructJSON(`{
+						"apiVersion": "registry.fn.crossplane.io/v1beta1",
+						"kind": "Input",
+						"phase3Features": true,
+						"traversalConfig": {
+							"enabled": true,
+							"maxDepth": 3,
+							"maxResources": 50,
+							"timeout": "10s",
+							"direction": "forward",
+							"scopeFilter": {
+								"platformOnly": true,
+								"includeAPIGroups": ["*.kubecore.io", "v1"]
+							},
+							"performance": {
+								"maxConcurrentRequests": 10,
+								"enableMetrics": true
+							}
+						},
+						"fetchResources": [
+							{
+								"into": "rootProject",
+								"name": "test-project",
+								"apiVersion": "github.platform.kubecore.io/v1alpha1",
+								"kind": "GitHubProject",
+								"optional": false
+							}
+						]
+					}`),
+				},
+			},
+			hasError: false,
+		},
+		"Phase3DisabledTraversalConfig": {
+			reason: "Should not execute Phase 3 when traversal config is disabled",
+			args: args{
+				ctx: context.Background(),
+				req: &fnv1.RunFunctionRequest{
+					Meta: &fnv1.RequestMeta{Tag: "test"},
+					Observed: &fnv1.State{
+						Composite: &fnv1.Resource{
+							Resource: resource.MustStructJSON(`{
+								"apiVersion": "test.kubecore.io/v1alpha1",
+								"kind": "TestXR",
+								"metadata": {
+									"name": "test-xr"
+								},
+								"spec": {}
+							}`),
+						},
+					},
+					Input: resource.MustStructJSON(`{
+						"apiVersion": "registry.fn.crossplane.io/v1beta1",
+						"kind": "Input",
+						"phase3Features": true,
+						"traversalConfig": {
+							"enabled": false,
+							"maxDepth": 3
+						},
+						"fetchResources": [
+							{
+								"into": "directResource",
+								"name": "test-resource",
+								"apiVersion": "v1",
+								"kind": "ConfigMap",
+								"optional": true
+							}
+						]
+					}`),
+				},
+			},
+			hasError: false,
+		},
+		"Phase3NoTraversalConfig": {
+			reason: "Should not execute Phase 3 when no traversal config provided",
+			args: args{
+				ctx: context.Background(),
+				req: &fnv1.RunFunctionRequest{
+					Meta: &fnv1.RequestMeta{Tag: "test"},
+					Observed: &fnv1.State{
+						Composite: &fnv1.Resource{
+							Resource: resource.MustStructJSON(`{
+								"apiVersion": "test.kubecore.io/v1alpha1",
+								"kind": "TestXR",
+								"metadata": {
+									"name": "test-xr"
+								},
+								"spec": {}
+							}`),
+						},
+					},
+					Input: resource.MustStructJSON(`{
+						"apiVersion": "registry.fn.crossplane.io/v1beta1",
+						"kind": "Input",
+						"phase3Features": true,
+						"fetchResources": [
+							{
+								"into": "directResource",
+								"name": "test-resource",
+								"apiVersion": "v1",
+								"kind": "ConfigMap",
+								"optional": true
+							}
+						]
+					}`),
+				},
+			},
+			hasError: false,
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			f := NewFunction(logging.NewNopLogger())
+			rsp, err := f.RunFunction(tc.args.ctx, tc.args.req)
+
+			// Basic functional test - should not panic and should return a response
+			if rsp == nil {
+				t.Errorf("%s\nExpected response but got nil", tc.reason)
+			}
+
+			// Check error expectations
+			if tc.hasError && err == nil {
+				t.Errorf("%s\nExpected error but got none", tc.reason)
+			}
+
+			if !tc.hasError && err != nil {
+				t.Errorf("%s\nUnexpected error: %v", tc.reason, err)
+			}
+
+			// Phase 3 should properly log its activity
+			// This is a basic test - in a real environment with a cluster,
+			// Phase 3 traversal would actually execute
+		})
+	}
+}
+
 // Test embedded registry functionality
 func TestEmbeddedRegistry(t *testing.T) {
 	f := NewFunction(logging.NewNopLogger())

@@ -1,0 +1,79 @@
+# Phase 3 Input Configuration Example - Transitive Discovery
+apiVersion: registry.fn.crossplane.io/v1beta1
+kind: Input
+metadata:
+  name: schema-registry-phase3
+# Enable Phase 3 features
+phase3Features: true
+fetchTimeout: "15s"
+maxConcurrentFetches: 8
+
+# Traversal configuration for Phase 3 transitive discovery
+traversalConfig:
+  enabled: true
+  maxDepth: 3
+  maxResources: 50
+  timeout: "10s"
+  direction: "forward"
+  
+  scopeFilter:
+    platformOnly: true
+    includeAPIGroups:
+      - "*.kubecore.io"
+      - "v1"
+      - "apps/v1"
+    crossNamespaceEnabled: false
+    includeNamespaces:
+      - "default"
+      - "kubecore-system"
+
+  performance:
+    maxConcurrentRequests: 10
+    requestTimeout: "3s"
+    enableMetrics: true
+    resourceDeduplication: true
+    memoryLimits:
+      maxGraphSize: 10485760  # 10MB
+      maxCacheSize: 5242880   # 5MB
+      gcThreshold: 8388608    # 8MB
+
+  referenceResolution:
+    enableDynamicCRDs: true
+    followOwnerReferences: true
+    followCustomReferences: true
+    skipMissingReferences: true
+    minConfidenceThreshold: 0.7
+
+  cycleHandling:
+    detectionEnabled: true
+    onCycleDetected: "continue"
+    maxCycles: 5
+    reportCycles: true
+
+  batchConfig:
+    enabled: true
+    batchSize: 5
+    maxConcurrentBatches: 2
+    sameDepthBatching: true
+    batchTimeout: "2s"
+
+  cacheConfig:
+    enabled: true
+    ttl: "5m"
+    maxSize: 500
+    strategy: "lru"
+
+fetchResources:
+  # Start with a root GitHubProject resource
+  - into: "rootProject"
+    name: "platform-core"
+    apiVersion: "github.platform.kubecore.io/v1alpha1"
+    kind: "GitHubProject"
+    optional: false
+
+  # Start with a KubEnv resource for traversal
+  - into: "environment"
+    name: "dev"
+    apiVersion: "platform.kubecore.io/v1alpha1"
+    kind: "KubEnv"
+    optional: false

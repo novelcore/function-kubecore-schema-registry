@@ -1,16 +1,16 @@
-# XRD Definition for Schema Registry Phase 2 Test
+# XRD Definition for Schema Registry Phase 3 Test
 apiVersion: apiextensions.crossplane.io/v1
 kind: CompositeResourceDefinition
 metadata:
-  name: xschemaregistryphase2tests.test.kubecore.platform.io
+  name: xschemaregistryphase3tests.test.kubecore.platform.io
 spec:
   group: test.kubecore.platform.io
   names:
-    kind: XSchemaRegistryPhase2Test
-    plural: xschemaregistryphase2tests
+    kind: XSchemaRegistryPhase3Test
+    plural: xschemaregistryphase3tests
   claimNames:
-    kind: SchemaRegistryPhase2Test
-    plural: schemaregistryphase2tests
+    kind: SchemaRegistryPhase3Test
+    plural: schemaregistryphase3tests
   versions:
   - name: v1alpha1
     served: true
@@ -28,14 +28,30 @@ spec:
               description:
                 type: string
                 description: "Description of what this test validates"
-              phase2Enabled:
+              phase3Enabled:
                 type: boolean
-                description: "Whether to test Phase 2 features"
+                description: "Whether to test Phase 3 features"
                 default: true
               testScenario:
                 type: string
                 description: "Test scenario to execute"
-                enum: ["backward-compatibility", "label-discovery", "expression-discovery", "advanced-features", "error-handling", "performance"]
+                enum: ["complete-topology", "security-boundary", "cycle-detection", "performance-optimization", "reference-resolution", "memory-management", "input-validation"]
+              rootResource:
+                type: object
+                description: "Root resource configuration for transitive discovery"
+                properties:
+                  name:
+                    type: string
+                  namespace:
+                    type: string
+                  apiVersion:
+                    type: string
+                  kind:
+                    type: string
+                required:
+                - name
+                - apiVersion
+                - kind
             required:
             - testName
             - testScenario
@@ -55,462 +71,284 @@ spec:
                     type: integer
                   executionTime:
                     type: string
-              phase2Results:
+              phase3Results:
                 type: object
                 properties:
-                  totalResourcesFetched:
-                    type: integer
-                  queryExecutionTime:
-                    type: string
-                  constraintResults:
+                  traversalStats:
                     type: object
+                    properties:
+                      totalDiscovered:
+                        type: integer
+                      maxDepthReached:
+                        type: integer
+                      cyclesDetected:
+                        type: integer
+                      platformResourcesOnly:
+                        type: boolean
+                      batchesProcessed:
+                        type: integer
+                      cacheHitRate:
+                        type: number
+                      memoryUsageBytes:
+                        type: integer
+                      executionTimeMs:
+                        type: integer
+                  graphMetadata:
+                    type: object
+                    properties:
+                      nodeCount:
+                        type: integer
+                      edgeCount:
+                        type: integer
+                      stronglyConnectedComponents:
+                        type: integer
+                  securityValidation:
+                    type: object
+                    properties:
+                      platformBoundaryRespected:
+                        type: boolean
+                      excludedResourcesCount:
+                        type: integer
+                      allowedAPIGroups:
+                        type: array
+                        items:
+                          type: string
 ---
-# Phase 2 Test Composition
+# Phase 3 Test Composition
 apiVersion: apiextensions.crossplane.io/v1
 kind: Composition
 metadata:
-  name: xschemaregistryphase2test.test.kubecore.platform.io
+  name: xschemaregistryphase3test.test.kubecore.platform.io
 spec:
   compositeTypeRef:
     apiVersion: test.kubecore.platform.io/v1alpha1
-    kind: XSchemaRegistryPhase2Test
+    kind: XSchemaRegistryPhase3Test
 
   mode: Pipeline
 
   pipeline:
-  # Step 1: Backward Compatibility Test - Phase 1 without phase2Features
-  - step: phase1-compatibility-test
+  # Step 1: Phase 3 Transitive Discovery - Complete Application Topology
+  - step: phase3-transitive-discovery
     functionRef:
       name: function-kubecore-schema-registry
     input:
       apiVersion: registry.fn.crossplane.io/v1beta1
       kind: Input
-      # phase2Features: false (commented out to test default behavior)
-      fetchTimeout: "10s"
+      phase3Features: true
+      fetchTimeout: "30s"
+      maxConcurrentFetches: 10
+      fetchResources:
+      # Root resource for transitive discovery
+      - into: rootAppResource
+        name: art-api
+        namespace: default
+        apiVersion: app.kubecore.io/v1alpha1
+        kind: App
+        optional: false
+      traversalConfig:
+        enabled: true
+        maxDepth: -1                        # Unlimited depth
+        maxResources: 100                   # Safety limit
+        timeout: "30s"
+        direction: "bidirectional"          # Find dependencies and dependents
+        scopeFilter:
+          platformOnly: true                # CRITICAL: Only platform resources
+          includeAPIGroups:
+            - "*.kubecore.io"
+            - "platform.kubecore.io"
+            - "github.platform.kubecore.io"
+            - "app.kubecore.io"
+          excludeKinds:                     # Infrastructure resources excluded
+            - "Secret"
+            - "ConfigMap"
+            - "ServiceAccount"
+            - "ClusterSecretStore"
+            - "PersistentVolumeClaim"
+          crossNamespaceEnabled: true
+        batchConfig:
+          enabled: true
+          batchSize: 10
+          maxConcurrentBatches: 3
+          sameDepthBatching: true
+          batchTimeout: "5s"
+        cacheConfig:
+          enabled: true
+          ttl: "5m"
+          maxSize: 1000
+          strategy: "lru"
+        referenceResolution:
+          enableDynamicCRDs: true
+          followOwnerReferences: true
+          followCustomReferences: true
+          skipMissingReferences: true
+          minConfidenceThreshold: 0.5
+          additionalPatterns:
+            - pattern: "*ClusterRef"
+              targetKind: "KubeCluster"
+              targetGroup: "platform.kubecore.io"
+              confidence: 0.9
+            - pattern: "*EnvRef"
+              targetKind: "KubEnv"
+              targetGroup: "platform.kubecore.io"
+              confidence: 0.9
+        cycleHandling:
+          detectionEnabled: true
+          onCycleDetected: "continue"       # Continue traversal on cycle
+          maxCycles: 10
+          reportCycles: true
+        performance:
+          maxConcurrentRequests: 10
+          requestTimeout: "2s"
+          enableMetrics: true
+          resourceDeduplication: true
+          memoryLimits:
+            maxGraphSize: 52428800          # 50MB graph limit
+            maxCacheSize: 10485760          # 10MB cache limit
+            gcThreshold: 83886080           # 80MB GC threshold
+
+  # Step 2: Phase 3 Platform Security Boundary Test
+  - step: phase3-security-boundary
+    functionRef:
+      name: function-kubecore-schema-registry
+    input:
+      apiVersion: registry.fn.crossplane.io/v1beta1
+      kind: Input
+      phase3Features: true
+      fetchTimeout: "20s"
       maxConcurrentFetches: 5
       fetchResources:
-      # Direct resource fetch (Phase 1 compatibility)
-      - into: directConfigMap
-        name: kube-root-ca.crt
-        namespace: default
-        apiVersion: v1
-        kind: ConfigMap
+      # Test platform boundary enforcement starting from KubeCluster
+      - into: securityTestRoot
+        name: demo-cluster
+        namespace: test
+        apiVersion: platform.kubecore.io/v1alpha1
+        kind: KubeCluster
         optional: false
-      - into: directService
-        name: kubernetes
-        namespace: default
-        apiVersion: v1
-        kind: Service
-        optional: false
+      traversalConfig:
+        enabled: true
+        maxDepth: 3
+        maxResources: 50
+        timeout: "20s"
+        direction: "forward"
+        scopeFilter:
+          platformOnly: true                # STRICT: Only platform resources
+          includeAPIGroups:
+            - "platform.kubecore.io"        # Only core platform
+          excludeKinds:                     # All infrastructure excluded
+            - "Secret"
+            - "ConfigMap"
+            - "ServiceAccount"
+            - "ClusterSecretStore"
+            - "PersistentVolumeClaim"
+            - "PersistentVolume"
+            - "Pod"
+            - "Service"
+            - "Deployment"
+          crossNamespaceEnabled: false      # Stay within namespace
+        referenceResolution:
+          followOwnerReferences: false      # Don't follow k8s owner refs
+          followCustomReferences: true      # Only platform custom refs
+          minConfidenceThreshold: 0.8       # High confidence
+        cycleHandling:
+          detectionEnabled: true
+          onCycleDetected: "fail"           # Fail on cycles in platform
+        performance:
+          maxConcurrentRequests: 5          # Conservative
+          enableMetrics: true
 
-  # Step 2: Phase 2 Label-Based Discovery Test
-  - step: phase2-label-discovery
+  # Step 3: Phase 3 Cycle Detection Test
+  - step: phase3-cycle-detection
     functionRef:
       name: function-kubecore-schema-registry
     input:
       apiVersion: registry.fn.crossplane.io/v1beta1
       kind: Input
-      phase2Features: true
-      fetchTimeout: "15s"
-      maxConcurrentFetches: 5
-      fetchResources:
-      # Label-based discovery with matchLabels
-      - into: systemPods
-        apiVersion: v1
-        kind: Pod
-        matchType: label
-        selector:
-          labels:
-            matchLabels:
-              k8s-app: kube-proxy
-          namespaces: ["kube-system"]
-        strategy:
-          minMatches: 0
-          maxMatches: 50
-          sortBy:
-            - field: metadata.name
-              order: asc
-        optional: true
-      
-      # Label-based with matchExpressions
-      - into: systemServices
-        apiVersion: v1
-        kind: Service
-        matchType: label
-        selector:
-          labels:
-            matchExpressions:
-              - key: k8s-app
-                operator: Exists
-          namespaces: ["kube-system"]
-        strategy:
-          maxMatches: 10
-        optional: true
-
-  # Step 3: Phase 2 Expression-Based Discovery Test
-  - step: phase2-expression-discovery
-    functionRef:
-      name: function-kubecore-schema-registry
-    input:
-      apiVersion: registry.fn.crossplane.io/v1beta1
-      kind: Input
-      phase2Features: true
+      phase3Features: true
       fetchTimeout: "15s"
       maxConcurrentFetches: 3
       fetchResources:
-      # Expression-based discovery - test Equals operator
-      - into: clusterIPServices
-        apiVersion: v1
-        kind: Service
-        matchType: expression
-        selector:
-          expressions:
-            - field: spec.type
-              operator: Equals
-              value: "ClusterIP"
-          namespaces: ["default", "kube-system"]
-        strategy:
-          maxMatches: 10
-        optional: true
-      
-      # Expression-based discovery - test Exists operator
-      - into: annotatedServices
-        apiVersion: v1
-        kind: Service
-        matchType: expression
-        selector:
-          expressions:
-            - field: metadata.annotations
-              operator: Exists
-        strategy:
-          maxMatches: 20
-        optional: true
-      
-      # Expression-based discovery - test In operator
-      - into: systemNamespaces
-        apiVersion: v1
-        kind: Namespace
-        matchType: expression
-        selector:
-          expressions:
-            - field: metadata.name
-              operator: In
-              values: ["kube-system", "kube-public", "kube-node-lease", "default"]
-        strategy:
-          minMatches: 1
-          maxMatches: 10
-          sortBy:
-            - field: metadata.creationTimestamp
-              order: asc
+      # Test cycle detection in resource chain
+      - into: cycleTestRoot
+        name: demo-kubesystem
+        namespace: test
+        apiVersion: platform.kubecore.io/v1alpha1
+        kind: KubeSystem
         optional: false
+      traversalConfig:
+        enabled: true
+        maxDepth: 5
+        maxResources: 30
+        timeout: "15s"
+        direction: "bidirectional"          # Both directions for cycles
+        scopeFilter:
+          platformOnly: true
+          includeAPIGroups:
+            - "platform.kubecore.io"
+          crossNamespaceEnabled: true
+        cycleHandling:
+          detectionEnabled: true             # ENABLE cycle detection
+          onCycleDetected: "continue"        # Continue on cycle
+          maxCycles: 5
+          reportCycles: true                 # Report cycle details
+        referenceResolution:
+          followOwnerReferences: true
+          followCustomReferences: true
+          minConfidenceThreshold: 0.6
+        performance:
+          enableMetrics: true
+          resourceDeduplication: true
 
-  # Step 4: Advanced Features Test
-  - step: phase2-advanced-features
+  # Step 4: Phase 3 Performance Optimization Test
+  - step: phase3-performance-optimization
     functionRef:
       name: function-kubecore-schema-registry
     input:
       apiVersion: registry.fn.crossplane.io/v1beta1
       kind: Input
-      phase2Features: true
-      fetchTimeout: "20s"
-      maxConcurrentFetches: 2
+      phase3Features: true
+      fetchTimeout: "25s"
+      maxConcurrentFetches: 8
       fetchResources:
-      # Test complex expression with multiple operators
-      - into: complexPodDiscovery
-        apiVersion: v1
-        kind: Pod
-        matchType: expression
-        selector:
-          expressions:
-            - field: status.phase
-              operator: Equals
-              value: "Running"
-            - field: metadata.namespace
-              operator: NotEquals
-              value: "kube-system"
-            - field: spec.containers
-              operator: Exists
-        strategy:
-          minMatches: 0
-          maxMatches: 15
-          stopOnFirst: false
-          sortBy:
-            - field: metadata.creationTimestamp
-              order: desc
-            - field: metadata.name
-              order: asc
-          failOnConstraintViolation: false
-        optional: true
-      
-      # Test constraint violation handling
-      - into: strictNamespaceSearch
-        apiVersion: v1
-        kind: Namespace
-        matchType: label
-        selector:
-          labels:
-            matchLabels:
-              name: kube-system
-        strategy:
-          minMatches: 1
-          maxMatches: 1
-          failOnConstraintViolation: true
+      # Test performance with multiple root resources
+      - into: performanceTestRoot
+        name: demo-dev
+        namespace: test
+        apiVersion: platform.kubecore.io/v1alpha1
+        kind: KubEnv
         optional: false
-
-  # Step 5: Process Phase 2 results and generate validation ConfigMaps
-  - step: generate-phase2-results
-    functionRef:
-      name: function-go-templating
-    input:
-      apiVersion: gotemplating.fn.crossplane.io/v1beta1
-      kind: GoTemplate
-      source: Inline
-      inline:
-        template: |
-          {{- $fetchedResources := index .context "kubecore-schema-registry.fn.kubecore.platform.io/fetched-resources" }}
-          {{- $fetchSummary := index .context "kubecore-schema-registry.fn.kubecore.platform.io/fetch-summary" }}
-          {{- $testName := .observed.composite.resource.spec.testName }}
-          {{- $testScenario := .observed.composite.resource.spec.testScenario | default "comprehensive" }}
-          {{- $namespace := .observed.composite.resource.metadata.namespace | default "default" }}
-
-          {{- /* Phase 2 Test Summary ConfigMap */}}
-          ---
-          apiVersion: kubernetes.crossplane.io/v1alpha2
-          kind: Object
-          metadata:
-            name: {{ $testName }}-phase2-summary
-            annotations:
-              crossplane.io/external-name: {{ $testName }}-phase2-summary
-              gotemplating.fn.crossplane.io/composition-resource-name: {{ $testName }}-phase2-summary
-          spec:
-            forProvider:
-              manifest:
-                apiVersion: v1
-                kind: ConfigMap
-                metadata:
-                  name: {{ $testName }}-phase2-summary
-                  namespace: {{ $namespace }}
-                  labels:
-                    kubecore.io/test-name: {{ $testName }}
-                    kubecore.io/test-type: phase2-validation
-                    kubecore.io/test-scenario: {{ $testScenario }}
-                  annotations:
-                    kubecore.io/generated-at: {{ now | date "2006-01-02T15:04:05Z07:00" }}
-                data:
-                  test-scenario: {{ $testScenario }}
-                  
-                  # Phase 1 Backward Compatibility Results
-                  {{- if $fetchedResources.directConfigMap }}
-                  direct-configmap-status: "PASS"
-                  direct-configmap-name: {{ $fetchedResources.directConfigMap.metadata.name }}
-                  {{- else }}
-                  direct-configmap-status: "FAIL"
-                  {{- end }}
-                  {{- if $fetchedResources.directService }}
-                  direct-service-status: "PASS"
-                  direct-service-name: {{ $fetchedResources.directService.metadata.name }}
-                  {{- else }}
-                  direct-service-status: "FAIL"
-                  {{- end }}
-                  
-                  # Phase 2 Label Discovery Results
-                  {{- if $fetchedResources.systemPods }}
-                  label-system-pods-count: "{{ len $fetchedResources.systemPods }}"
-                  label-system-pods-status: "PASS"
-                  {{- else }}
-                  label-system-pods-count: "0"
-                  label-system-pods-status: "OPTIONAL"
-                  {{- end }}
-                  {{- if $fetchedResources.systemServices }}
-                  label-system-services-count: "{{ len $fetchedResources.systemServices }}"
-                  label-system-services-status: "PASS"
-                  {{- else }}
-                  label-system-services-count: "0"
-                  label-system-services-status: "OPTIONAL"
-                  {{- end }}
-                  
-                  # Phase 2 Expression Discovery Results
-                  {{- if $fetchedResources.clusterIPServices }}
-                  expr-clusterip-services-count: "{{ len $fetchedResources.clusterIPServices }}"
-                  expr-clusterip-services-status: "PASS"
-                  {{- else }}
-                  expr-clusterip-services-count: "0"
-                  expr-clusterip-services-status: "OPTIONAL"
-                  {{- end }}
-                  {{- if $fetchedResources.systemNamespaces }}
-                  expr-system-namespaces-count: "{{ len $fetchedResources.systemNamespaces }}"
-                  expr-system-namespaces-status: "PASS"
-                  {{- else }}
-                  expr-system-namespaces-count: "0"
-                  expr-system-namespaces-status: "FAIL"
-                  {{- end }}
-                  
-                  # Advanced Features Test Results
-                  {{- if $fetchedResources.complexPodDiscovery }}
-                  complex-pod-discovery-count: "{{ len $fetchedResources.complexPodDiscovery }}"
-                  complex-pod-discovery-status: "PASS"
-                  {{- else }}
-                  complex-pod-discovery-count: "0"
-                  complex-pod-discovery-status: "OPTIONAL"
-                  {{- end }}
-                  {{- if $fetchedResources.strictNamespaceSearch }}
-                  strict-namespace-search-count: "{{ len $fetchedResources.strictNamespaceSearch }}"
-                  strict-namespace-search-status: "PASS"
-                  {{- else }}
-                  strict-namespace-search-count: "0"
-                  strict-namespace-search-status: "FAIL"
-                  {{- end }}
-
-                  # Phase 2 Enhanced Metadata
-                  {{- if $fetchSummary.phase2Results }}
-                  phase2-features-enabled: "true"
-                  total-resources-fetched: "{{ $fetchSummary.totalResourcesFetched }}"
-                  query-execution-time: "{{ $fetchSummary.queryExecutionTime }}"
-                  {{- if $fetchSummary.phase2Results.performanceMetrics }}
-                  planning-time: "{{ $fetchSummary.phase2Results.performanceMetrics.planningTime }}"
-                  execution-time: "{{ $fetchSummary.phase2Results.performanceMetrics.executionTime }}"
-                  {{- end }}
-                  {{- else }}
-                  phase2-features-enabled: "false"
-                  {{- end }}
-            providerConfigRef:
-              name: kubesys-enhanced
-
-          {{- /* Resource Details ConfigMaps for Phase 2 validation */}}
-          {{- range $resourceType, $resourceList := $fetchedResources }}
-          {{- if ne $resourceType "fetchSummary" }}
-          {{- if kindIs "slice" $resourceList }}
-          {{- /* Handle multiple resources (Phase 2 results) */}}
-          {{- range $idx, $resource := $resourceList }}
-          ---
-          apiVersion: kubernetes.crossplane.io/v1alpha2
-          kind: Object
-          metadata:
-            name: {{ $testName }}-{{ $resourceType }}-{{ $idx }}
-            annotations:
-              crossplane.io/external-name: {{ $testName }}-{{ $resourceType }}-{{ $resource.metadata.name }}
-              gotemplating.fn.crossplane.io/composition-resource-name: {{ $testName }}-{{ $resourceType }}-{{ $idx }}
-          spec:
-            forProvider:
-              manifest:
-                apiVersion: v1
-                kind: ConfigMap
-                metadata:
-                  name: {{ $testName }}-{{ $resourceType }}-{{ $resource.metadata.name }}
-                  namespace: {{ $namespace }}
-                  labels:
-                    kubecore.io/test-name: {{ $testName }}
-                    kubecore.io/resource-type: {{ $resourceType }}
-                    kubecore.io/resource-name: {{ $resource.metadata.name }}
-                    kubecore.io/resource-index: "{{ $idx }}"
-                  annotations:
-                    kubecore.io/fetched-at: {{ index $resource "_kubecore" "fetchedAt" | default (now | date "2006-01-02T15:04:05Z07:00") }}
-                    kubecore.io/matched-by: {{ index $resource "_kubecore" "matchedBy" | default "unknown" }}
-                data:
-                  resource-name: {{ $resource.metadata.name }}
-                  resource-kind: {{ $resource.kind | default "Unknown" }}
-                  resource-api-version: {{ $resource.apiVersion | default "Unknown" }}
-                  resource-namespace: {{ $resource.metadata.namespace | default "cluster-scoped" }}
-                  resource-uid: {{ $resource.metadata.uid | default "not-available" }}
-                  {{- if index $resource "_kubecore" "totalCandidates" }}
-                  total-candidates: "{{ index $resource "_kubecore" "totalCandidates" }}"
-                  {{- end }}
-                  {{- if index $resource "_kubecore" "matchDetails" }}
-                  {{- if index $resource "_kubecore" "matchDetails" "labelsMatched" }}
-                  labels-matched: |
-                    {{- range index $resource "_kubecore" "matchDetails" "labelsMatched" }}
-                    - {{ . }}
-                    {{- end }}
-                  {{- end }}
-                  {{- if index $resource "_kubecore" "matchDetails" "expressionsEvaluated" }}
-                  expressions-evaluated: |
-                    {{- range index $resource "_kubecore" "matchDetails" "expressionsEvaluated" }}
-                    - {{ . }}
-                    {{- end }}
-                  {{- end }}
-                  {{- end }}
-            providerConfigRef:
-              name: kubesys-enhanced
-          {{- end }}
-          {{- else if kindIs "map" $resourceList }}
-          {{- /* Handle single resource (Phase 1 or single Phase 2 result) */}}
-          ---
-          apiVersion: kubernetes.crossplane.io/v1alpha2
-          kind: Object
-          metadata:
-            name: {{ $testName }}-{{ $resourceType }}-single
-            annotations:
-              crossplane.io/external-name: {{ $testName }}-{{ $resourceType }}-{{ $resourceList.metadata.name }}
-              gotemplating.fn.crossplane.io/composition-resource-name: {{ $testName }}-{{ $resourceType }}-single
-          spec:
-            forProvider:
-              manifest:
-                apiVersion: v1
-                kind: ConfigMap
-                metadata:
-                  name: {{ $testName }}-{{ $resourceType }}-{{ $resourceList.metadata.name }}
-                  namespace: {{ $namespace }}
-                  labels:
-                    kubecore.io/test-name: {{ $testName }}
-                    kubecore.io/resource-type: {{ $resourceType }}
-                    kubecore.io/resource-name: {{ $resourceList.metadata.name }}
-                  annotations:
-                    kubecore.io/fetched-at: {{ index $resourceList "_kubecore" "fetchedAt" | default (now | date "2006-01-02T15:04:05Z07:00") }}
-                    kubecore.io/matched-by: {{ index $resourceList "_kubecore" "matchedBy" | default "direct" }}
-                data:
-                  resource-name: {{ $resourceList.metadata.name }}
-                  resource-kind: {{ $resourceList.kind | default "Unknown" }}
-                  resource-api-version: {{ $resourceList.apiVersion | default "Unknown" }}
-                  resource-namespace: {{ $resourceList.metadata.namespace | default "cluster-scoped" }}
-                  resource-uid: {{ $resourceList.metadata.uid | default "not-available" }}
-            providerConfigRef:
-              name: kubesys-enhanced
-          {{- end }}
-          {{- end }}
-          {{- end }}
-
-          {{- /* Debug and Context Validation ConfigMap */}}
-          ---
-          apiVersion: kubernetes.crossplane.io/v1alpha2
-          kind: Object
-          metadata:
-            name: {{ $testName }}-debug-context
-            annotations:
-              crossplane.io/external-name: {{ $testName }}-debug-context
-              gotemplating.fn.crossplane.io/composition-resource-name: {{ $testName }}-debug-context
-          spec:
-            forProvider:
-              manifest:
-                apiVersion: v1
-                kind: ConfigMap
-                metadata:
-                  name: {{ $testName }}-debug-context
-                  namespace: {{ $namespace }}
-                  labels:
-                    kubecore.io/test-name: {{ $testName }}
-                    kubecore.io/test-type: debug
-                  annotations:
-                    kubecore.io/generated-at: {{ now | date "2006-01-02T15:04:05Z07:00" }}
-                data:
-                  all-context-keys: |
-                    {{- range $key, $_ := .context }}
-                    - {{ $key }}
-                    {{- end }}
-                  fetched-resource-types: |
-                    {{- range $key, $_ := $fetchedResources }}
-                    - {{ $key }}
-                    {{- end }}
-                  raw-fetch-summary: |
-                    {{- if $fetchSummary }}
-                    {{ $fetchSummary | toYaml | nindent 20 }}
-                    {{- else }}
-                    No fetch summary available
-                    {{- end }}
-                  raw-sample-resource: |
-                    {{- if $fetchedResources.directConfigMap }}
-                    {{ $fetchedResources.directConfigMap | toYaml | nindent 20 }}
-                    {{- else }}
-                    No direct ConfigMap found
-                    {{- end }}
-            providerConfigRef:
-              name: kubesys-enhanced
+      traversalConfig:
+        enabled: true
+        maxDepth: 4
+        maxResources: 75
+        timeout: "25s"
+        direction: "bidirectional"
+        scopeFilter:
+          platformOnly: true
+          includeAPIGroups:
+            - "*.kubecore.io"
+          crossNamespaceEnabled: true
+        batchConfig:
+          enabled: true                      # TEST batch processing
+          batchSize: 5                       # Smaller batches
+          maxConcurrentBatches: 2
+          sameDepthBatching: true
+          batchTimeout: "3s"
+        cacheConfig:
+          enabled: true                      # TEST caching
+          ttl: "2m"
+          maxSize: 500
+          strategy: "lru"
+        referenceResolution:
+          enableDynamicCRDs: true
+          followOwnerReferences: true
+          followCustomReferences: true
+          minConfidenceThreshold: 0.7
+        performance:
+          maxConcurrentRequests: 8           # TEST concurrency
+          requestTimeout: "3s"
+          enableMetrics: true                # CAPTURE metrics
+          resourceDeduplication: true
+          memoryLimits:
+            maxGraphSize: 26214400           # 25MB limit
+            maxCacheSize: 5242880            # 5MB cache
+            gcThreshold: 41943040            # 40MB GC
