@@ -19,8 +19,9 @@ spec:
   - name: v1beta1
     schema:
       openAPIV3Schema:
-        description: Input defines the Phase 1 input schema for the KubeCore Schema
-          Registry Function
+        description: |-
+          Input defines the input schema for the KubeCore Schema Registry Function
+          Supports both Phase 1 (direct) and Phase 2 (label/expression-based) discovery
         properties:
           apiVersion:
             description: |-
@@ -31,40 +32,189 @@ spec:
             type: string
           fetchResources:
             description: |-
-              FetchResources defines a list of direct resource references to fetch
-              Phase 1 supports only direct references (name/namespace)
+              FetchResources defines a list of resource references to fetch
+              Supports Phase 1 direct references and Phase 2 selector-based discovery
             items:
-              description: ResourceRequest defines a direct resource reference to
-                fetch
+              description: |-
+                ResourceRequest defines a resource reference for fetching
+                Supports both direct references (Phase 1) and selector-based discovery (Phase 2)
               properties:
                 apiVersion:
-                  description: APIVersion of the resource (e.g., "v1", "apps/v1")
                   type: string
                 into:
-                  description: Into specifies the field name where the resource will
-                    be stored in the response
+                  description: Into specifies the field name where the resource(s)
+                    will be stored in the response
                   pattern: ^[a-zA-Z][a-zA-Z0-9_]*$
                   type: string
                 kind:
                   description: Kind of the resource (e.g., "Pod", "Service", "GitHubProject")
                   type: string
+                matchType:
+                  default: direct
+                  description: MatchType determines how resources are matched
+                  enum:
+                  - direct
+                  - label
+                  - expression
+                  type: string
                 name:
-                  description: Name is the name of the resource to fetch
                   type: string
                 namespace:
                   description: Namespace is the namespace of the resource (required
-                    for namespaced resources)
+                    for namespaced resources in direct match)
                   type: string
                 optional:
                   default: false
                   description: Optional indicates whether the fetch should fail if
                     the resource is not found
                   type: boolean
+                selector:
+                  description: Selector defines resource selection criteria for Phase
+                    2 discovery
+                  properties:
+                    crossNamespace:
+                      default: false
+                      description: CrossNamespace enables cross-namespace discovery
+                      type: boolean
+                    expressions:
+                      description: Expressions defines expression-based selection
+                        (for MatchTypeExpression)
+                      items:
+                        description: Expression defines expression-based resource
+                          selection
+                        properties:
+                          field:
+                            description: Field specifies the resource field to evaluate
+                              (e.g., "metadata.labels", "spec.enabled")
+                            type: string
+                          operator:
+                            description: Operator defines the comparison operation
+                            enum:
+                            - Equals
+                            - NotEquals
+                            - In
+                            - NotIn
+                            - Contains
+                            - StartsWith
+                            - EndsWith
+                            - Regex
+                            - Exists
+                            - NotExists
+                            type: string
+                          value:
+                            description: Value is the value to compare against (not
+                              used for Exists/NotExists)
+                            type: string
+                          values:
+                            description: Values is an array of values for In/NotIn
+                              operations
+                            items:
+                              type: string
+                            type: array
+                        required:
+                        - field
+                        - operator
+                        type: object
+                      type: array
+                    labels:
+                      description: Labels defines label-based selection (for MatchTypeLabel)
+                      properties:
+                        matchExpressions:
+                          description: MatchExpressions define more complex label
+                            selection criteria
+                          items:
+                            description: LabelSelectorRequirement defines a label
+                              selector requirement
+                            properties:
+                              key:
+                                description: Key is the label key
+                                type: string
+                              operator:
+                                description: Operator defines the relationship between
+                                  key and values
+                                enum:
+                                - In
+                                - NotIn
+                                - Exists
+                                - DoesNotExist
+                                type: string
+                              values:
+                                description: Values is an array of string values for
+                                  In and NotIn operations
+                                items:
+                                  type: string
+                                type: array
+                            required:
+                            - key
+                            - operator
+                            type: object
+                          type: array
+                        matchLabels:
+                          additionalProperties:
+                            type: string
+                          description: MatchLabels are key-value pairs for exact label
+                            matches
+                          type: object
+                      type: object
+                    namespaces:
+                      description: |-
+                        Namespaces specifies which namespaces to search in
+                        Empty list means cluster-wide search for cluster-scoped resources
+                        For namespaced resources, defaults to function's namespace if empty
+                      items:
+                        type: string
+                      type: array
+                  type: object
+                strategy:
+                  description: Strategy defines the matching strategy for selector-based
+                    discovery
+                  properties:
+                    failOnConstraintViolation:
+                      default: false
+                      description: FailOnConstraintViolation fails the request if
+                        min/max constraints are violated
+                      type: boolean
+                    maxMatches:
+                      description: MaxMatches specifies the maximum number of resources
+                        to return
+                      minimum: 1
+                      type: integer
+                    minMatches:
+                      description: MinMatches specifies the minimum number of resources
+                        that must match
+                      minimum: 0
+                      type: integer
+                    sortBy:
+                      description: SortBy defines how to sort matched resources
+                      items:
+                        description: SortCriteria defines sorting criteria for matched
+                          resources
+                        properties:
+                          field:
+                            description: Field specifies the field to sort by (e.g.,
+                              "metadata.name", "metadata.creationTimestamp")
+                            type: string
+                          order:
+                            default: asc
+                            description: Order specifies the sort order
+                            enum:
+                            - asc
+                            - desc
+                            type: string
+                        required:
+                        - field
+                        type: object
+                      type: array
+                    stopOnFirst:
+                      default: false
+                      description: StopOnFirst stops searching after finding the first
+                        match
+                      type: boolean
+                  type: object
               required:
               - apiVersion
               - into
               - kind
-              - name
               type: object
             type: array
           fetchTimeout:
@@ -89,6 +239,455 @@ spec:
             minimum: 1
             type: integer
           metadata:
+            type: object
+          phase2Features:
+            default: false
+            description: Phase2Features enables Phase 2 capabilities (label/expression-based
+              discovery)
+            type: boolean
+          phase3Features:
+            default: false
+            description: Phase3Features enables Phase 3 capabilities (transitive discovery
+              with DAG construction)
+            type: boolean
+          traversalConfig:
+            description: TraversalConfig contains configuration for Phase 3 transitive
+              discovery
+            properties:
+              batchConfig:
+                description: BatchConfig controls batch processing optimization
+                properties:
+                  batchSize:
+                    default: 10
+                    description: BatchSize is the number of resources to process per
+                      batch
+                    maximum: 100
+                    minimum: 1
+                    type: integer
+                  batchTimeout:
+                    default: 3s
+                    description: BatchTimeout is the timeout for each batch operation
+                    pattern: ^[0-9]+(s|m|h)$
+                    type: string
+                  enabled:
+                    default: true
+                    description: Enabled indicates if batch processing is enabled
+                    type: boolean
+                  maxConcurrentBatches:
+                    default: 3
+                    description: MaxConcurrentBatches limits the number of concurrent
+                      batches
+                    maximum: 10
+                    minimum: 1
+                    type: integer
+                  sameDepthBatching:
+                    default: true
+                    description: SameDepthBatching enables batching of resources at
+                      the same depth
+                    type: boolean
+                type: object
+              cacheConfig:
+                description: CacheConfig controls execution-scoped caching
+                properties:
+                  enabled:
+                    default: true
+                    description: Enabled indicates if caching is enabled
+                    type: boolean
+                  maxSize:
+                    default: 1000
+                    description: MaxSize is the maximum number of cached entries
+                    maximum: 10000
+                    minimum: 10
+                    type: integer
+                  strategy:
+                    default: lru
+                    description: Strategy determines how resources are cached
+                    enum:
+                    - lru
+                    - lfu
+                    - ttl
+                    type: string
+                  ttl:
+                    default: 5m
+                    description: TTL is the time-to-live for cached entries
+                    pattern: ^[0-9]+(s|m|h)$
+                    type: string
+                type: object
+              cycleHandling:
+                description: CycleHandling controls how cycles are handled
+                properties:
+                  detectionEnabled:
+                    default: true
+                    description: DetectionEnabled enables cycle detection during traversal
+                    type: boolean
+                  maxCycles:
+                    default: 10
+                    description: MaxCycles limits the number of cycles to track
+                    maximum: 100
+                    minimum: 1
+                    type: integer
+                  onCycleDetected:
+                    default: continue
+                    description: OnCycleDetected defines the action when a cycle is
+                      detected
+                    enum:
+                    - continue
+                    - stop
+                    - fail
+                    type: string
+                  reportCycles:
+                    default: true
+                    description: ReportCycles includes cycle information in results
+                    type: boolean
+                type: object
+              direction:
+                default: forward
+                description: Direction specifies the direction of traversal
+                enum:
+                - forward
+                - reverse
+                - bidirectional
+                type: string
+              enabled:
+                default: false
+                description: Enabled indicates if Phase 3 transitive discovery is
+                  enabled
+                type: boolean
+              maxDepth:
+                default: 3
+                description: MaxDepth limits the depth of transitive discovery
+                maximum: 10
+                minimum: 1
+                type: integer
+              maxResources:
+                default: 100
+                description: MaxResources limits the total number of resources to
+                  discover
+                maximum: 1000
+                minimum: 1
+                type: integer
+              performance:
+                description: Performance controls performance optimization
+                properties:
+                  enableMetrics:
+                    default: true
+                    description: EnableMetrics enables collection of performance metrics
+                    type: boolean
+                  maxConcurrentRequests:
+                    default: 10
+                    description: MaxConcurrentRequests limits concurrent Kubernetes
+                      API requests
+                    maximum: 50
+                    minimum: 1
+                    type: integer
+                  memoryLimits:
+                    description: MemoryLimits sets memory usage limits
+                    properties:
+                      gcThreshold:
+                        default: 83886080
+                        description: GCThreshold triggers garbage collection when
+                          memory usage exceeds this threshold (in bytes)
+                        format: int64
+                        maximum: 2147483648
+                        minimum: 10485760
+                        type: integer
+                      maxCacheSize:
+                        default: 10485760
+                        description: MaxCacheSize limits the maximum size of caches
+                          (in bytes)
+                        format: int64
+                        maximum: 104857600
+                        minimum: 1048576
+                        type: integer
+                      maxGraphSize:
+                        default: 52428800
+                        description: MaxGraphSize limits the maximum size of the resource
+                          graph (in bytes)
+                        format: int64
+                        maximum: 1073741824
+                        minimum: 1048576
+                        type: integer
+                    type: object
+                  requestTimeout:
+                    default: 2s
+                    description: RequestTimeout is the timeout for individual API
+                      requests
+                    pattern: ^[0-9]+(s|m|h)$
+                    type: string
+                  resourceDeduplication:
+                    default: true
+                    description: ResourceDeduplication enables resource deduplication
+                      by UID
+                    type: boolean
+                type: object
+              referenceResolution:
+                description: ReferenceResolution controls how references are resolved
+                properties:
+                  additionalPatterns:
+                    description: AdditionalPatterns contains additional patterns for
+                      detecting reference fields
+                    items:
+                      description: ReferencePattern defines a pattern for detecting
+                        reference fields
+                      properties:
+                        confidence:
+                          default: 0.8
+                          description: Confidence is the confidence level of this
+                            pattern
+                          maximum: 1
+                          minimum: 0
+                          type: number
+                        pattern:
+                          description: Pattern is the field name pattern to match
+                          type: string
+                        targetGroup:
+                          description: TargetGroup is the expected target API group
+                          type: string
+                        targetKind:
+                          description: TargetKind is the expected target resource
+                            kind
+                          type: string
+                      required:
+                      - pattern
+                      type: object
+                    type: array
+                  enableDynamicCRDs:
+                    default: true
+                    description: EnableDynamicCRDs allows resolution of references
+                      in dynamically discovered CRDs
+                    type: boolean
+                  followCustomReferences:
+                    default: true
+                    description: FollowCustomReferences enables following custom reference
+                      fields
+                    type: boolean
+                  followOwnerReferences:
+                    default: true
+                    description: FollowOwnerReferences enables following owner reference
+                      chains
+                    type: boolean
+                  minConfidenceThreshold:
+                    default: 0.5
+                    description: MinConfidenceThreshold is the minimum confidence
+                      required for following references
+                    maximum: 1
+                    minimum: 0
+                    type: number
+                  skipMissingReferences:
+                    default: true
+                    description: SkipMissingReferences continues traversal when referenced
+                      resources are missing
+                    type: boolean
+                type: object
+              scopeFilter:
+                description: ScopeFilter determines which resources to include in
+                  traversal
+                properties:
+                  crossNamespaceEnabled:
+                    default: false
+                    description: CrossNamespaceEnabled allows traversal across namespace
+                      boundaries
+                    type: boolean
+                  excludeAPIGroups:
+                    description: ExcludeAPIGroups specifies which API groups to exclude
+                      (blocklist)
+                    items:
+                      type: string
+                    type: array
+                  excludeKinds:
+                    description: ExcludeKinds specifies which resource kinds to exclude
+                    items:
+                      type: string
+                    type: array
+                  excludeNamespaces:
+                    description: ExcludeNamespaces specifies which namespaces to exclude
+                    items:
+                      type: string
+                    type: array
+                  includeAPIGroups:
+                    default:
+                    - '*.kubecore.io'
+                    description: IncludeAPIGroups specifies which API groups to include
+                      (allowlist)
+                    items:
+                      type: string
+                    type: array
+                  includeKinds:
+                    description: IncludeKinds specifies which resource kinds to include
+                    items:
+                      type: string
+                    type: array
+                  includeNamespaces:
+                    description: IncludeNamespaces specifies which namespaces to include
+                    items:
+                      type: string
+                    type: array
+                  platformOnly:
+                    default: true
+                    description: PlatformOnly limits traversal to platform resources
+                      only
+                    type: boolean
+                type: object
+              timeout:
+                default: 10s
+                description: Timeout limits the total time for traversal
+                pattern: ^[0-9]+(s|m|h)$
+                type: string
+            type: object
+          xrLabels:
+            description: XRLabels enables XR label injection capabilities
+            properties:
+              dynamicLabels:
+                description: DynamicLabels defines labels with dynamic value computation
+                items:
+                  description: DynamicLabel defines a label with dynamic value computation
+                  properties:
+                    key:
+                      description: Key is the label key to set
+                      pattern: ^[a-z0-9A-Z]([a-z0-9A-Z._-]*[a-z0-9A-Z])?$
+                      type: string
+                    required:
+                      default: false
+                      description: Required indicates if this label must be successfully
+                        applied
+                      type: boolean
+                    source:
+                      default: xr-field
+                      description: Source defines where the label value comes from
+                      enum:
+                      - xr-field
+                      - environment
+                      - timestamp
+                      - uuid
+                      - constant
+                      type: string
+                    sourcePath:
+                      description: |-
+                        SourcePath specifies the path to extract value from (for xr-field source)
+                        Uses JSONPath syntax: "metadata.name", "spec.parameters.region"
+                      type: string
+                    transform:
+                      description: Transform defines optional value transformation
+                      properties:
+                        options:
+                          description: Options contains transformation-specific configuration
+                          properties:
+                            hashAlgorithm:
+                              default: sha256
+                              description: HashAlgorithm for hash transformation
+                              enum:
+                              - md5
+                              - sha1
+                              - sha256
+                              type: string
+                            hashLength:
+                              default: 8
+                              description: HashLength specifies length of hash output
+                                (for hash transformation)
+                              maximum: 64
+                              minimum: 4
+                              type: integer
+                            length:
+                              description: Length for truncate transformation
+                              maximum: 253
+                              minimum: 1
+                              type: integer
+                            new:
+                              description: New string for replace transformation
+                              type: string
+                            old:
+                              description: Old string for replace transformation
+                              type: string
+                            prefix:
+                              description: Prefix for prefix transformation
+                              type: string
+                            suffix:
+                              description: Suffix for suffix transformation
+                              type: string
+                          type: object
+                        type:
+                          description: Type specifies the transformation to apply
+                          enum:
+                          - lowercase
+                          - uppercase
+                          - prefix
+                          - suffix
+                          - replace
+                          - truncate
+                          - hash
+                          type: string
+                      required:
+                      - type
+                      type: object
+                    value:
+                      description: Value provides a constant value (for constant source)
+                      type: string
+                  required:
+                  - key
+                  type: object
+                type: array
+              enabled:
+                default: false
+                description: Enabled controls whether XR labeling is active
+                type: boolean
+              enforceLabels:
+                description: EnforceLabels ensures specified labels cannot be overridden
+                items:
+                  type: string
+                type: array
+              labels:
+                additionalProperties:
+                  type: string
+                description: Labels defines static labels to apply to the XR
+                type: object
+              mergeStrategy:
+                default: merge
+                description: MergeStrategy defines how labels are merged with existing
+                  XR labels
+                enum:
+                - merge
+                - replace
+                - fail-on-conflict
+                type: string
+              namespaceDetection:
+                description: NamespaceDetection configures automatic namespace label
+                  injection
+                properties:
+                  defaultNamespace:
+                    description: DefaultNamespace provides default when all strategies
+                      fail
+                    type: string
+                  enabled:
+                    default: false
+                    description: Enabled controls whether namespace detection is active
+                    type: boolean
+                  fallbackStrategy:
+                    default: function-namespace
+                    description: FallbackStrategy defines fallback when primary strategy
+                      fails
+                    enum:
+                    - xr-namespace
+                    - function-namespace
+                    - skip
+                    type: string
+                  labelKey:
+                    default: kubecore.io/namespace
+                    description: LabelKey is the label key to use for namespace information
+                    pattern: ^[a-z0-9A-Z]([a-z0-9A-Z._-]*[a-z0-9A-Z])?$
+                    type: string
+                  strategy:
+                    default: auto
+                    description: Strategy defines how namespace is determined
+                    enum:
+                    - xr-namespace
+                    - function-namespace
+                    - auto
+                    type: string
+                required:
+                - enabled
+                type: object
+            required:
+            - enabled
             type: object
         required:
         - fetchResources

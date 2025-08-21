@@ -1,0 +1,332 @@
+apiVersion: testing.kubecore.io/v1
+kind: TestingSpecification
+metadata:
+  name: xr-label-injection-test
+  version: v1.0.0
+spec:
+  function:
+    name: function-kubecore-schema-registry
+    image: function-kubecore-schema-registry:latest
+    
+  inputSchema:
+    apiVersion: registry.fn.crossplane.io/v1beta1
+    kind: Input
+    sampleInput: |
+      apiVersion: registry.fn.crossplane.io/v1beta1
+      kind: Input
+      xrLabels:
+        enabled: true
+        labels:
+          environment: test
+          team: platform
+        dynamicLabels:
+          - key: xr-name
+            source: xr-field
+            sourcePath: metadata.name
+        mergeStrategy: merge
+      fetchResources: []
+      
+  expectedOutput:
+    contextKeys:
+      - path: metadata.labels.environment
+        type: string
+        required: true
+        description: Static label applied to XR
+      - path: metadata.labels.team
+        type: string
+        required: true
+        description: Static label applied to XR
+      - path: metadata.labels.xr-name
+        type: string
+        required: true
+        description: Dynamic label from XR field
+        
+  validations:
+    - type: exists
+      path: observed.composite.resource.metadata.labels.environment
+      message: Static environment label should be applied to XR
+    - type: contains
+      path: observed.composite.resource.metadata.labels.environment
+      value: test
+      message: Environment label should have correct value
+    - type: exists
+      path: observed.composite.resource.metadata.labels.xr-name
+      message: Dynamic xr-name label should be extracted from metadata.name
+      
+  testCases:
+    - name: static-labels-only
+      description: Test application of static labels to XR
+      input: |
+        apiVersion: registry.fn.crossplane.io/v1beta1
+        kind: Input
+        xrLabels:
+          enabled: true
+          labels:
+            environment: production
+            team: platform
+          mergeStrategy: merge
+        fetchResources: []
+      xr: |
+        apiVersion: test.kubecore.io/v1alpha1
+        kind: TestXR
+        metadata:
+          name: test-xr
+      expectedLabels:
+        environment: production
+        team: platform
+        
+    - name: dynamic-labels-xr-field
+      description: Test dynamic label extraction from XR fields
+      input: |
+        apiVersion: registry.fn.crossplane.io/v1beta1
+        kind: Input
+        xrLabels:
+          enabled: true
+          dynamicLabels:
+            - key: xr-name
+              source: xr-field
+              sourcePath: metadata.name
+            - key: region
+              source: xr-field
+              sourcePath: spec.parameters.region
+          mergeStrategy: merge
+        fetchResources: []
+      xr: |
+        apiVersion: test.kubecore.io/v1alpha1
+        kind: TestXR
+        metadata:
+          name: production-cluster
+        spec:
+          parameters:
+            region: us-west-2
+      expectedLabels:
+        xr-name: production-cluster
+        region: us-west-2
+        
+    - name: transformations-lowercase
+      description: Test lowercase transformation
+      input: |
+        apiVersion: registry.fn.crossplane.io/v1beta1
+        kind: Input
+        xrLabels:
+          enabled: true
+          dynamicLabels:
+            - key: xr-name-lower
+              source: xr-field
+              sourcePath: metadata.name
+              transform:
+                type: lowercase
+          mergeStrategy: merge
+        fetchResources: []
+      xr: |
+        apiVersion: test.kubecore.io/v1alpha1
+        kind: TestXR
+        metadata:
+          name: Production-Cluster
+      expectedLabels:
+        xr-name-lower: production-cluster
+        
+    - name: transformations-prefix
+      description: Test prefix transformation
+      input: |
+        apiVersion: registry.fn.crossplane.io/v1beta1
+        kind: Input
+        xrLabels:
+          enabled: true
+          dynamicLabels:
+            - key: managed-name
+              source: xr-field
+              sourcePath: metadata.name
+              transform:
+                type: prefix
+                options:
+                  prefix: "managed-"
+          mergeStrategy: merge
+        fetchResources: []
+      xr: |
+        apiVersion: test.kubecore.io/v1alpha1
+        kind: TestXR
+        metadata:
+          name: cluster
+      expectedLabels:
+        managed-name: managed-cluster
+        
+    - name: constant-source
+      description: Test constant value source
+      input: |
+        apiVersion: registry.fn.crossplane.io/v1beta1
+        kind: Input
+        xrLabels:
+          enabled: true
+          dynamicLabels:
+            - key: managed-by
+              source: constant
+              value: crossplane
+            - key: environment
+              source: constant
+              value: production
+          mergeStrategy: merge
+        fetchResources: []
+      xr: |
+        apiVersion: test.kubecore.io/v1alpha1
+        kind: TestXR
+        metadata:
+          name: test-xr
+      expectedLabels:
+        managed-by: crossplane
+        environment: production
+        
+    - name: merge-strategy-merge
+      description: Test merge strategy with existing labels
+      input: |
+        apiVersion: registry.fn.crossplane.io/v1beta1
+        kind: Input
+        xrLabels:
+          enabled: true
+          labels:
+            team: new-team
+            environment: production
+          mergeStrategy: merge
+        fetchResources: []
+      xr: |
+        apiVersion: test.kubecore.io/v1alpha1
+        kind: TestXR
+        metadata:
+          name: test-xr
+          labels:
+            existing: value
+            team: old-team
+      expectedLabels:
+        existing: value
+        team: new-team
+        environment: production
+        
+    - name: namespace-detection-xr
+      description: Test namespace detection from XR namespace
+      input: |
+        apiVersion: registry.fn.crossplane.io/v1beta1
+        kind: Input
+        xrLabels:
+          enabled: true
+          namespaceDetection:
+            enabled: true
+            labelKey: kubecore.io/namespace
+            strategy: xr-namespace
+          mergeStrategy: merge
+        fetchResources: []
+      xr: |
+        apiVersion: test.kubecore.io/v1alpha1
+        kind: TestXR
+        metadata:
+          name: test-xr
+          namespace: production
+      expectedLabels:
+        kubecore.io/namespace: production
+        
+    - name: disabled-xr-labels
+      description: Test that disabled XR labels don't affect XR
+      input: |
+        apiVersion: registry.fn.crossplane.io/v1beta1
+        kind: Input
+        xrLabels:
+          enabled: false
+          labels:
+            should: not-appear
+        fetchResources: []
+      xr: |
+        apiVersion: test.kubecore.io/v1alpha1
+        kind: TestXR
+        metadata:
+          name: test-xr
+          labels:
+            existing: value
+      expectedLabels:
+        existing: value
+      prohibitedLabels:
+        - should
+        
+    - name: timestamp-and-uuid-sources
+      description: Test timestamp and UUID sources (validate pattern, not exact value)
+      input: |
+        apiVersion: registry.fn.crossplane.io/v1beta1
+        kind: Input
+        xrLabels:
+          enabled: true
+          dynamicLabels:
+            - key: created-at
+              source: timestamp
+            - key: tracking-id
+              source: uuid
+              transform:
+                type: truncate
+                options:
+                  length: 8
+          mergeStrategy: merge
+        fetchResources: []
+      xr: |
+        apiVersion: test.kubecore.io/v1alpha1
+        kind: TestXR
+        metadata:
+          name: test-xr
+      labelPatterns:
+        created-at: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+        tracking-id: "^[a-f0-9]{8}$"
+        
+  successCriteria:
+    - XResource labels applied successfully when enabled
+    - Static labels appear with correct values
+    - Dynamic labels extracted from XR fields correctly
+    - Transformations applied as configured
+    - Merge strategies work as expected
+    - Namespace detection functions correctly
+    - Disabled configuration doesn't affect XR
+    - Function completes without fatal errors
+    - Response contains no error conditions
+    
+  performanceExpectations:
+    maxExecutionTime: 5s
+    memoryLimit: 128Mi
+    
+  errorScenarios:
+    - name: invalid-field-path
+      description: Test handling of invalid field paths
+      input: |
+        apiVersion: registry.fn.crossplane.io/v1beta1
+        kind: Input
+        xrLabels:
+          enabled: true
+          dynamicLabels:
+            - key: missing
+              source: xr-field
+              sourcePath: missing.field
+              required: true
+        fetchResources: []
+      xr: |
+        apiVersion: test.kubecore.io/v1alpha1
+        kind: TestXR
+        metadata:
+          name: test-xr
+      expectError: true
+      errorType: field_extraction_error
+      
+    - name: missing-transform-options
+      description: Test handling of missing transformation options
+      input: |
+        apiVersion: registry.fn.crossplane.io/v1beta1
+        kind: Input
+        xrLabels:
+          enabled: true
+          dynamicLabels:
+            - key: prefixed
+              source: constant
+              value: test
+              transform:
+                type: prefix
+        fetchResources: []
+      xr: |
+        apiVersion: test.kubecore.io/v1alpha1
+        kind: TestXR
+        metadata:
+          name: test-xr
+      expectError: true
+      errorType: transform_validation_error

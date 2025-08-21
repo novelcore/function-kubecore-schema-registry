@@ -43,6 +43,9 @@ type Input struct {
 
 	// TraversalConfig contains configuration for Phase 3 transitive discovery
 	TraversalConfig *TraversalConfig `json:"traversalConfig,omitempty"`
+
+	// XRLabels enables XR label injection capabilities
+	XRLabels *XRLabelConfig `json:"xrLabels,omitempty"`
 }
 
 // ResourceRequest defines a resource reference for fetching

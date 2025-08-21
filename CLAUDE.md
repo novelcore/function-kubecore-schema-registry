@@ -3,6 +3,12 @@
 ## Repository Overview
 This repository contains a Crossplane Composition Function written in Go that manages schema registry resources for KubeCore platform. The function follows Crossplane's composition function architecture to dynamically template and manage cloud resources.
 
+### Key Features
+- **Phase 1**: Direct resource fetching by name and namespace
+- **Phase 2**: Label and expression-based resource discovery
+- **Phase 3**: Transitive resource discovery with dependency graph traversal
+- **XR Label Injection**: Dynamic label application on Composite Resources with transformations
+
 ## What is a Crossplane Function?
 Composition functions are custom programs that template Crossplane resources. When you create a Composite Resource (XR), Crossplane calls this function to determine what managed resources should be created. This allows for advanced templating logic using a full programming language rather than static YAML patches.
 
@@ -22,6 +28,38 @@ function-kubecore-schema-registry/
 ```
 
 ## Key Concepts
+
+### XR Label Injection
+The function supports dynamic label injection on Composite Resources (XRs) during the composition pipeline execution. This feature enables:
+
+- **Static Labels**: Apply predefined key-value pairs to XRs
+- **Dynamic Labels**: Extract values from XR fields with JSONPath-like syntax
+- **Label Transformations**: Transform values (lowercase, uppercase, prefix, suffix, hash, etc.)
+- **Namespace Detection**: Automatically detect and label namespace scope
+- **Merge Strategies**: Control how labels are merged with existing XR labels
+
+#### Configuration Example
+```yaml
+xrLabels:
+  enabled: true
+  labels:
+    kubecore.io/organization: "novelcore"
+    environment: "production"
+  dynamicLabels:
+    - key: "kubecore.io/project"
+      source: "xr-field"
+      sourcePath: "spec.projectName"
+      transform:
+        type: "lowercase"
+    - key: "created-timestamp"
+      source: "timestamp"
+  namespaceDetection:
+    enabled: true
+    labelKey: "kubecore.io/scope"
+    namespacedValue: "namespace-{namespace}"
+    clusterScopedValue: "cluster"
+  mergeStrategy: "merge"
+```
 
 ### RunFunction Method
 The core of this function is the `RunFunction` method in `fn.go`. It:

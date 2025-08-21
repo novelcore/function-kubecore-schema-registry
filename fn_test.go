@@ -598,6 +598,303 @@ func TestPhase3Features(t *testing.T) {
 	}
 }
 
+// XR Label Injection Integration Tests
+func TestXRLabelInjection(t *testing.T) {
+	type args struct {
+		ctx context.Context
+		req *fnv1.RunFunctionRequest
+	}
+
+	cases := map[string]struct {
+		reason           string
+		args             args
+		expectedLabels   map[string]string
+		shouldError      bool
+		checkDesiredXR   bool
+	}{
+		"StaticLabelsOnly": {
+			reason: "Should apply static labels to XR",
+			args: args{
+				ctx: context.Background(),
+				req: &fnv1.RunFunctionRequest{
+					Meta: &fnv1.RequestMeta{Tag: "test"},
+					Observed: &fnv1.State{
+						Composite: &fnv1.Resource{
+							Resource: resource.MustStructJSON(`{
+								"apiVersion": "test.kubecore.io/v1alpha1",
+								"kind": "TestXR",
+								"metadata": {
+									"name": "test-xr",
+									"namespace": "test-namespace"
+								},
+								"spec": {
+									"projectName": "demo-project"
+								}
+							}`),
+						},
+					},
+					Input: resource.MustStructJSON(`{
+						"apiVersion": "registry.fn.crossplane.io/v1beta1",
+						"kind": "Input",
+						"xrLabels": {
+							"enabled": true,
+							"labels": {
+								"kubecore.io/organization": "novelcore",
+								"environment": "production"
+							},
+							"mergeStrategy": "merge"
+						},
+						"fetchResources": []
+					}`),
+				},
+			},
+			expectedLabels: map[string]string{
+				"kubecore.io/organization": "novelcore",
+				"environment":              "production",
+			},
+			checkDesiredXR: true,
+		},
+		"DynamicLabelsFromXRField": {
+			reason: "Should apply dynamic labels from XR fields",
+			args: args{
+				ctx: context.Background(),
+				req: &fnv1.RunFunctionRequest{
+					Meta: &fnv1.RequestMeta{Tag: "test"},
+					Observed: &fnv1.State{
+						Composite: &fnv1.Resource{
+							Resource: resource.MustStructJSON(`{
+								"apiVersion": "test.kubecore.io/v1alpha1",
+								"kind": "TestXR",
+								"metadata": {
+									"name": "test-xr",
+									"namespace": "test-namespace"
+								},
+								"spec": {
+									"projectName": "Demo-Project",
+									"team": {
+										"name": "platform-team"
+									}
+								}
+							}`),
+						},
+					},
+					Input: resource.MustStructJSON(`{
+						"apiVersion": "registry.fn.crossplane.io/v1beta1",
+						"kind": "Input",
+						"xrLabels": {
+							"enabled": true,
+							"dynamicLabels": [
+								{
+									"key": "kubecore.io/project",
+									"source": "xr-field",
+									"sourcePath": "spec.projectName",
+									"transform": {
+										"type": "lowercase"
+									}
+								},
+								{
+									"key": "team",
+									"source": "xr-field",
+									"sourcePath": "spec.team.name"
+								}
+							]
+						},
+						"fetchResources": []
+					}`),
+				},
+			},
+			expectedLabels: map[string]string{
+				"kubecore.io/project": "demo-project",
+				"team":                "platform-team",
+			},
+			checkDesiredXR: true,
+		},
+		"NamespaceDetection": {
+			reason: "Should detect namespace and add scope label",
+			args: args{
+				ctx: context.Background(),
+				req: &fnv1.RunFunctionRequest{
+					Meta: &fnv1.RequestMeta{Tag: "test"},
+					Observed: &fnv1.State{
+						Composite: &fnv1.Resource{
+							Resource: resource.MustStructJSON(`{
+								"apiVersion": "test.kubecore.io/v1alpha1",
+								"kind": "TestXR",
+								"metadata": {
+									"name": "test-xr",
+									"namespace": "production"
+								},
+								"spec": {}
+							}`),
+						},
+					},
+					Input: resource.MustStructJSON(`{
+						"apiVersion": "registry.fn.crossplane.io/v1beta1",
+						"kind": "Input",
+						"xrLabels": {
+							"enabled": true,
+							"namespaceDetection": {
+								"enabled": true,
+								"labelKey": "kubecore.io/scope",
+								"namespacedValue": "namespace-{namespace}"
+							}
+						},
+						"fetchResources": []
+					}`),
+				},
+			},
+			expectedLabels: map[string]string{
+				"kubecore.io/scope": "namespace-production",
+			},
+			checkDesiredXR: true,
+		},
+		"ClusterScopedDetection": {
+			reason: "Should detect cluster-scoped resources",
+			args: args{
+				ctx: context.Background(),
+				req: &fnv1.RunFunctionRequest{
+					Meta: &fnv1.RequestMeta{Tag: "test"},
+					Observed: &fnv1.State{
+						Composite: &fnv1.Resource{
+							Resource: resource.MustStructJSON(`{
+								"apiVersion": "test.kubecore.io/v1alpha1",
+								"kind": "TestXR",
+								"metadata": {
+									"name": "test-xr"
+								},
+								"spec": {}
+							}`),
+						},
+					},
+					Input: resource.MustStructJSON(`{
+						"apiVersion": "registry.fn.crossplane.io/v1beta1",
+						"kind": "Input",
+						"xrLabels": {
+							"enabled": true,
+							"namespaceDetection": {
+								"enabled": true,
+								"labelKey": "kubecore.io/scope",
+								"clusterScopedValue": "cluster"
+							}
+						},
+						"fetchResources": []
+					}`),
+				},
+			},
+			expectedLabels: map[string]string{
+				"kubecore.io/scope": "cluster",
+			},
+			checkDesiredXR: true,
+		},
+		"LabelInjectionDisabled": {
+			reason: "Should not apply labels when disabled",
+			args: args{
+				ctx: context.Background(),
+				req: &fnv1.RunFunctionRequest{
+					Meta: &fnv1.RequestMeta{Tag: "test"},
+					Observed: &fnv1.State{
+						Composite: &fnv1.Resource{
+							Resource: resource.MustStructJSON(`{
+								"apiVersion": "test.kubecore.io/v1alpha1",
+								"kind": "TestXR",
+								"metadata": {
+									"name": "test-xr"
+								},
+								"spec": {}
+							}`),
+						},
+					},
+					Input: resource.MustStructJSON(`{
+						"apiVersion": "registry.fn.crossplane.io/v1beta1",
+						"kind": "Input",
+						"xrLabels": {
+							"enabled": false,
+							"labels": {
+								"should-not": "be-applied"
+							}
+						},
+						"fetchResources": []
+					}`),
+				},
+			},
+			expectedLabels: map[string]string{},
+			checkDesiredXR:  true,
+		},
+		"BackwardCompatibility": {
+			reason: "Should work without xrLabels configuration",
+			args: args{
+				ctx: context.Background(),
+				req: &fnv1.RunFunctionRequest{
+					Meta: &fnv1.RequestMeta{Tag: "test"},
+					Observed: &fnv1.State{
+						Composite: &fnv1.Resource{
+							Resource: resource.MustStructJSON(`{
+								"apiVersion": "test.kubecore.io/v1alpha1",
+								"kind": "TestXR",
+								"metadata": {
+									"name": "test-xr"
+								},
+								"spec": {}
+							}`),
+						},
+					},
+					Input: resource.MustStructJSON(`{
+						"apiVersion": "registry.fn.crossplane.io/v1beta1",
+						"kind": "Input",
+						"fetchResources": []
+					}`),
+				},
+			},
+			checkDesiredXR: false,
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			f := NewFunction(logging.NewNopLogger())
+			rsp, err := f.RunFunction(tc.args.ctx, tc.args.req)
+
+			// Check error expectations
+			if tc.shouldError && err == nil {
+				t.Errorf("%s\nExpected error but got none", tc.reason)
+			}
+			if !tc.shouldError && err != nil {
+				t.Errorf("%s\nUnexpected error: %v", tc.reason, err)
+			}
+
+			// Basic response validation
+			if rsp == nil {
+				t.Errorf("%s\nExpected response but got nil", tc.reason)
+				return
+			}
+
+			// Check desired XR labels if requested
+			if tc.checkDesiredXR && rsp.Desired != nil && rsp.Desired.Composite != nil {
+				// Convert to Unstructured to access labels
+				desired := &unstructured.Unstructured{}
+				if err := desired.UnmarshalJSON([]byte(rsp.Desired.Composite.Resource.String())); err != nil {
+					t.Errorf("%s\nFailed to unmarshal desired XR: %v", tc.reason, err)
+					return
+				}
+				
+				desiredLabels := desired.GetLabels()
+				if desiredLabels == nil {
+					desiredLabels = make(map[string]string)
+				}
+
+				// Check expected labels are present
+				for expectedKey, expectedValue := range tc.expectedLabels {
+					if actualValue, exists := desiredLabels[expectedKey]; !exists {
+						t.Errorf("%s\nExpected label %s not found in desired XR", tc.reason, expectedKey)
+					} else if actualValue != expectedValue {
+						t.Errorf("%s\nLabel %s: expected %s, got %s", tc.reason, expectedKey, expectedValue, actualValue)
+					}
+				}
+			}
+		})
+	}
+}
+
 // Test embedded registry functionality
 func TestEmbeddedRegistry(t *testing.T) {
 	f := NewFunction(logging.NewNopLogger())

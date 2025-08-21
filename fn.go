@@ -15,6 +15,7 @@ import (
 	"github.com/crossplane/function-kubecore-schema-registry/pkg/discovery"
 	"github.com/crossplane/function-kubecore-schema-registry/pkg/errors"
 	"github.com/crossplane/function-kubecore-schema-registry/pkg/initialization"
+	"github.com/crossplane/function-kubecore-schema-registry/pkg/labels"
 	"github.com/crossplane/function-kubecore-schema-registry/pkg/parser"
 	"github.com/crossplane/function-kubecore-schema-registry/pkg/registry"
 	responsebuilder "github.com/crossplane/function-kubecore-schema-registry/pkg/response"
@@ -31,6 +32,7 @@ type Function struct {
 	parser          parser.XRParser
 	responseBuilder responsebuilder.Builder
 	config          *types.RegistryConfig
+	labelProcessor  *labels.Processor
 }
 
 // NewFunction creates a new function instance
@@ -63,6 +65,7 @@ func NewFunction(log logging.Logger) *Function {
 		parser:          parser.NewDefaultXRParser(),
 		responseBuilder: responsebuilder.NewDefaultBuilder(),
 		config:          config,
+		labelProcessor:  labels.NewProcessor(log, "crossplane-system"), // TODO: Get actual function namespace
 	}
 }
 
@@ -107,6 +110,16 @@ func (f *Function) RunFunction(ctx context.Context, req *fnv1.RunFunctionRequest
 	if err := request.GetInput(req, in); err != nil {
 		response.Fatal(rsp, errors.Wrap(err, "cannot get function input"))
 		return rsp, nil
+	}
+
+	// Process XR label injection if enabled
+	if in.XRLabels != nil && in.XRLabels.Enabled {
+		f.log.Info("Starting XR label processing")
+		if err := f.labelProcessor.ProcessLabels(ctx, xr, in.XRLabels); err != nil {
+			response.Fatal(rsp, errors.Wrap(err, "XR label processing failed"))
+			return rsp, nil
+		}
+		f.log.Info("XR label processing completed successfully")
 	}
 
 	// Parse fetch requests from function input and XR spec

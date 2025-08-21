@@ -1,0 +1,88 @@
+apiVersion: registry.fn.crossplane.io/v1beta1
+kind: Input
+metadata:
+  name: xr-label-example
+spec:
+  # Enable XR Label Injection
+  xrLabels:
+    enabled: true
+    
+    # Static labels applied to all XRs
+    labels:
+      environment: production
+      managed-by: crossplane
+      team: platform
+    
+    # Dynamic labels computed from XR fields
+    dynamicLabels:
+      # Extract XR name
+      - key: xr-name
+        source: xr-field
+        sourcePath: metadata.name
+        transform:
+          type: lowercase
+      
+      # Extract region from spec with prefix transformation
+      - key: region
+        source: xr-field
+        sourcePath: spec.parameters.region
+        transform:
+          type: prefix
+          options:
+            prefix: "aws-"
+      
+      # Extract project name and hash it for compliance
+      - key: project-hash
+        source: xr-field
+        sourcePath: spec.parameters.project
+        transform:
+          type: hash
+          options:
+            hashAlgorithm: sha256
+            hashLength: 8
+            
+      # Constant deployment timestamp
+      - key: deployed-at
+        source: timestamp
+        
+      # UUID for tracking
+      - key: tracking-id
+        source: uuid
+        transform:
+          type: truncate
+          options:
+            length: 8
+    
+    # Enable automatic namespace detection
+    namespaceDetection:
+      enabled: true
+      labelKey: kubecore.io/namespace
+      strategy: auto
+      fallbackStrategy: function-namespace
+      
+    # Use merge strategy with enforcement
+    mergeStrategy: merge
+    enforceLabels:
+      - managed-by
+      - environment
+  
+  # Standard resource fetching continues to work
+  fetchResources:
+    - into: project
+      name: example-project
+      apiVersion: github.platform.kubecore.io/v1alpha1
+      kind: GitHubProject
+      optional: true
+---
+apiVersion: test.kubecore.io/v1alpha1
+kind: TestXR  
+metadata:
+  name: Production-Cluster-East
+  namespace: production
+  labels:
+    existing: value
+spec:
+  parameters:
+    region: us-east-1
+    project: critical-app
+    size: large
