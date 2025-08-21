@@ -99,12 +99,12 @@ func TestSchemaParser(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := parser.ParseOpenAPISchema(tt.schema)
-			
+
 			if tt.expectedError {
 				assert.Error(t, err)
 				return
 			}
-			
+
 			require.NoError(t, err)
 			assert.NotNil(t, result)
 			assert.Len(t, result.Fields, tt.expectedFields)
@@ -189,10 +189,10 @@ func TestReferenceDetector(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			references, err := detector.DetectReferences(tt.schema)
-			
+
 			require.NoError(t, err)
 			assert.Len(t, references, tt.expectedReferences)
-			
+
 			// Verify confidence scores
 			for _, ref := range references {
 				assert.Greater(t, ref.Confidence, 0.0)
@@ -205,10 +205,10 @@ func TestReferenceDetector(t *testing.T) {
 
 func TestCRDDiscovererMocked(t *testing.T) {
 	logger := logging.NewNopLogger()
-	
+
 	// Create a fake clientset with mock CRDs
 	fakeClient := apiextensionsfake.NewSimpleClientset()
-	
+
 	// Add a mock CRD that matches KubeCore patterns
 	mockCRD := &apiextv1.CustomResourceDefinition{
 		ObjectMeta: metav1.ObjectMeta{
@@ -234,7 +234,7 @@ func TestCRDDiscovererMocked(t *testing.T) {
 								"metadata": {
 									Type: "object",
 									Properties: map[string]apiextv1.JSONSchemaProps{
-										"name": {Type: "string"},
+										"name":      {Type: "string"},
 										"namespace": {Type: "string"},
 									},
 								},
@@ -267,22 +267,22 @@ func TestCRDDiscovererMocked(t *testing.T) {
 			},
 		},
 	}
-	
+
 	// Add the CRD to the fake client
 	_, err := fakeClient.ApiextensionsV1().CustomResourceDefinitions().Create(
 		context.Background(), mockCRD, metav1.CreateOptions{})
 	require.NoError(t, err)
-	
+
 	discoverer := NewCRDDiscoverer(fakeClient, logger)
-	
+
 	t.Run("discover matching CRDs", func(t *testing.T) {
 		patterns := []string{"platform.kubecore.io"}
-		
+
 		crdInfos, err := discoverer.DiscoverCRDs(context.Background(), patterns)
-		
+
 		require.NoError(t, err)
 		assert.Len(t, crdInfos, 1)
-		
+
 		crdInfo := crdInfos[0]
 		assert.Equal(t, "KubeCluster", crdInfo.Kind)
 		assert.Equal(t, "platform.kubecore.io", crdInfo.Group)
@@ -291,32 +291,32 @@ func TestCRDDiscovererMocked(t *testing.T) {
 		assert.NotNil(t, crdInfo.Schema)
 		assert.NotNil(t, crdInfo.Metadata)
 	})
-	
+
 	t.Run("discover with timeout", func(t *testing.T) {
 		patterns := []string{"platform.kubecore.io"}
 		timeout := 2 * time.Second
-		
+
 		crdInfos, err := discoverer.DiscoverWithTimeout(context.Background(), patterns, timeout)
-		
+
 		require.NoError(t, err)
 		assert.Len(t, crdInfos, 1)
 	})
-	
+
 	t.Run("no matching patterns", func(t *testing.T) {
 		patterns := []string{"nonexistent.example.com"}
-		
+
 		crdInfos, err := discoverer.DiscoverCRDs(context.Background(), patterns)
-		
+
 		require.NoError(t, err)
 		assert.Len(t, crdInfos, 0)
 	})
-	
+
 	t.Run("statistics", func(t *testing.T) {
 		patterns := []string{"platform.kubecore.io"}
-		
+
 		_, err := discoverer.DiscoverCRDs(context.Background(), patterns)
 		require.NoError(t, err)
-		
+
 		stats := discoverer.GetDiscoveryStatistics()
 		assert.NotNil(t, stats)
 		assert.Equal(t, 1, stats.TotalCRDs)
@@ -328,7 +328,7 @@ func TestCRDDiscovererMocked(t *testing.T) {
 func TestReferencePatterns(t *testing.T) {
 	logger := logging.NewNopLogger()
 	detector := NewReferenceDetector(logger)
-	
+
 	tests := []struct {
 		name      string
 		fieldName string
@@ -372,7 +372,7 @@ func TestReferencePatterns(t *testing.T) {
 			expected: true,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			matches := detector.MatchesReferencePattern(tt.fieldName, tt.fieldDef)
@@ -384,7 +384,7 @@ func TestReferencePatterns(t *testing.T) {
 func TestExtractReferenceMetadata(t *testing.T) {
 	logger := logging.NewNopLogger()
 	detector := NewReferenceDetector(logger)
-	
+
 	tests := []struct {
 		name           string
 		fieldName      string
@@ -419,28 +419,28 @@ func TestExtractReferenceMetadata(t *testing.T) {
 			expectedMethod: "description_analysis",
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			metadata := detector.ExtractReferenceMetadata(tt.fieldName, tt.fieldDef)
-			
+
 			if tt.expectedMethod == "" {
 				assert.Nil(t, metadata)
 				return
 			}
-			
+
 			require.NotNil(t, metadata)
 			assert.Equal(t, tt.expectedMethod, metadata.DetectionMethod)
-			
+
 			if tt.expectedKind != "" {
 				assert.Equal(t, tt.expectedKind, metadata.TargetKind)
 			}
-			
+
 			// Only check group if we expect a specific one
 			if tt.expectedGroup != "" && tt.expectedGroup != "ANY" {
 				assert.Equal(t, tt.expectedGroup, metadata.TargetGroup)
 			}
-			
+
 			assert.Greater(t, metadata.Confidence, 0.0)
 			assert.LessOrEqual(t, metadata.Confidence, 1.0)
 		})
@@ -449,59 +449,59 @@ func TestExtractReferenceMetadata(t *testing.T) {
 
 func TestCacheOperations(t *testing.T) {
 	cache := NewCRDCache(1 * time.Second)
-	
+
 	crdInfo := &CRDInfo{
 		Name:    "test-crd",
 		Group:   "test.example.com",
 		Version: "v1",
 		Kind:    "TestKind",
 	}
-	
+
 	t.Run("set and get", func(t *testing.T) {
 		key := "test-key"
-		
+
 		// Initially empty
 		result := cache.Get(key)
 		assert.Nil(t, result)
-		
+
 		// Set value
 		cache.Set(key, crdInfo)
-		
+
 		// Get value
 		result = cache.Get(key)
 		assert.NotNil(t, result)
 		assert.Equal(t, crdInfo.Name, result.Name)
 		assert.Equal(t, crdInfo.Kind, result.Kind)
 	})
-	
+
 	t.Run("cache expiration", func(t *testing.T) {
 		key := "expiring-key"
-		
+
 		// Use a cache with very short TTL
 		shortCache := NewCRDCache(10 * time.Millisecond)
-		
+
 		// Set value
 		shortCache.Set(key, crdInfo)
-		
+
 		// Should be available immediately
 		result := shortCache.Get(key)
 		assert.NotNil(t, result)
-		
+
 		// Wait for expiration
 		time.Sleep(20 * time.Millisecond)
-		
+
 		// Should be expired
 		result = shortCache.Get(key)
 		assert.Nil(t, result)
 	})
-	
+
 	t.Run("clear cache", func(t *testing.T) {
 		key := "clear-test"
-		
+
 		cache.Set(key, crdInfo)
 		result := cache.Get(key)
 		assert.NotNil(t, result)
-		
+
 		cache.Clear()
 		result = cache.Get(key)
 		assert.Nil(t, result)
@@ -513,7 +513,7 @@ func TestDefaultReferencePatterns(t *testing.T) {
 		assert.NotEmpty(t, DefaultReferencePatterns)
 		assert.Greater(t, len(DefaultReferencePatterns), 5)
 	})
-	
+
 	t.Run("patterns have required fields", func(t *testing.T) {
 		for i, pattern := range DefaultReferencePatterns {
 			assert.NotEmpty(t, pattern.Pattern, "Pattern %d should have a pattern", i)
@@ -522,7 +522,7 @@ func TestDefaultReferencePatterns(t *testing.T) {
 			assert.LessOrEqual(t, pattern.Confidence, 1.0, "Pattern %d should have confidence <= 1.0", i)
 		}
 	})
-	
+
 	t.Run("kubecore patterns exist", func(t *testing.T) {
 		var kubeCorePatterns []ReferencePattern
 		for _, pattern := range DefaultReferencePatterns {
@@ -531,7 +531,7 @@ func TestDefaultReferencePatterns(t *testing.T) {
 				kubeCorePatterns = append(kubeCorePatterns, pattern)
 			}
 		}
-		
+
 		assert.NotEmpty(t, kubeCorePatterns, "Should have KubeCore-specific patterns")
 	})
 }
@@ -539,36 +539,36 @@ func TestDefaultReferencePatterns(t *testing.T) {
 func TestSchemaParserCaching(t *testing.T) {
 	logger := logging.NewNopLogger()
 	parser := NewSchemaParser(logger)
-	
+
 	schema := &apiextv1.JSONSchemaProps{
 		Type: "object",
 		Properties: map[string]apiextv1.JSONSchemaProps{
 			"name": {Type: "string"},
 		},
 	}
-	
+
 	t.Run("parse twice should use cache", func(t *testing.T) {
 		// First parse
 		result1, err := parser.ParseOpenAPISchema(schema)
 		require.NoError(t, err)
 		assert.NotNil(t, result1)
-		
+
 		// Second parse (should use cache)
 		result2, err := parser.ParseOpenAPISchema(schema)
 		require.NoError(t, err)
 		assert.NotNil(t, result2)
-		
+
 		// Results should be equivalent
 		assert.Equal(t, len(result1.Fields), len(result2.Fields))
 	})
-	
+
 	t.Run("cache statistics", func(t *testing.T) {
 		stats := parser.GetCacheStats()
 		assert.NotNil(t, stats)
 		assert.Contains(t, stats, "schemas")
 		assert.Contains(t, stats, "fields")
 	})
-	
+
 	t.Run("clear cache", func(t *testing.T) {
 		parser.ClearCache()
 		stats := parser.GetCacheStats()
@@ -581,18 +581,18 @@ func TestSchemaParserCaching(t *testing.T) {
 func BenchmarkSchemaParser(b *testing.B) {
 	logger := logging.NewNopLogger()
 	parser := NewSchemaParser(logger)
-	
+
 	schema := &apiextv1.JSONSchemaProps{
 		Type: "object",
 		Properties: map[string]apiextv1.JSONSchemaProps{
-			"name":        {Type: "string"},
-			"namespace":   {Type: "string"},
-			"value":       {Type: "string"},
-			"replicas":    {Type: "integer"},
-			"enabled":     {Type: "boolean"},
+			"name":      {Type: "string"},
+			"namespace": {Type: "string"},
+			"value":     {Type: "string"},
+			"replicas":  {Type: "integer"},
+			"enabled":   {Type: "boolean"},
 		},
 	}
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, err := parser.ParseOpenAPISchema(schema)
@@ -605,18 +605,18 @@ func BenchmarkSchemaParser(b *testing.B) {
 func BenchmarkReferenceDetector(b *testing.B) {
 	logger := logging.NewNopLogger()
 	detector := NewReferenceDetector(logger)
-	
+
 	schema := &ResourceSchema{
 		Fields: map[string]*FieldDefinition{
-			"configMapRef":    {Type: "string"},
-			"secretRef":       {Type: "string"},
-			"kubeClusterRef":  {Type: "string"},
-			"normalField1":    {Type: "string"},
-			"normalField2":    {Type: "integer"},
-			"normalField3":    {Type: "boolean"},
+			"configMapRef":   {Type: "string"},
+			"secretRef":      {Type: "string"},
+			"kubeClusterRef": {Type: "string"},
+			"normalField1":   {Type: "string"},
+			"normalField2":   {Type: "integer"},
+			"normalField3":   {Type: "boolean"},
 		},
 	}
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, err := detector.DetectReferences(schema)

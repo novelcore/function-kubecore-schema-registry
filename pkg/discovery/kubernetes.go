@@ -52,13 +52,13 @@ func NewKubernetesEngine(config *rest.Config, registry registry.Registry) (*Kube
 }
 
 // NewKubernetesEngineWithTimeout creates a new engine with custom timeout
-func NewKubernetesEngineWithTimeout(config *rest.Config, registry registry.Registry, 
+func NewKubernetesEngineWithTimeout(config *rest.Config, registry registry.Registry,
 	timeout time.Duration, maxConcurrent int) (*KubernetesEngine, error) {
 	engine, err := NewKubernetesEngine(config, registry)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	engine.timeout = timeout
 	engine.maxConcurrent = maxConcurrent
 	return engine, nil
@@ -67,7 +67,7 @@ func NewKubernetesEngineWithTimeout(config *rest.Config, registry registry.Regis
 // FetchResources fetches resources based on the provided requests
 func (e *KubernetesEngine) FetchResources(requests []v1beta1.ResourceRequest) (*FetchResult, error) {
 	startTime := time.Now()
-	
+
 	result := &FetchResult{
 		Resources: make(map[string]*FetchedResource),
 		Summary: FetchSummary{
@@ -77,7 +77,7 @@ func (e *KubernetesEngine) FetchResources(requests []v1beta1.ResourceRequest) (*
 
 	// Create a semaphore to limit concurrent requests
 	sem := make(chan struct{}, e.maxConcurrent)
-	
+
 	// Use errgroup for concurrent processing
 	var mu sync.Mutex
 	g, ctx := errgroup.WithContext(context.Background())
@@ -90,13 +90,13 @@ func (e *KubernetesEngine) FetchResources(requests []v1beta1.ResourceRequest) (*
 			defer func() { <-sem }()
 
 			fetchedResource, _ := e.fetchSingleResource(ctx, req)
-			
+
 			mu.Lock()
 			defer mu.Unlock()
-			
+
 			if fetchedResource != nil {
 				result.Resources[req.Into] = fetchedResource
-				
+
 				// Update statistics
 				switch fetchedResource.Metadata.FetchStatus {
 				case FetchStatusSuccess:
@@ -131,13 +131,13 @@ func (e *KubernetesEngine) FetchResources(requests []v1beta1.ResourceRequest) (*
 				}
 
 				// Add to errors if failed and not optional
-				if fetchedResource.Metadata.FetchStatus != FetchStatusSuccess && 
-				   fetchedResource.Metadata.Error != nil && 
-				   !req.Optional {
+				if fetchedResource.Metadata.FetchStatus != FetchStatusSuccess &&
+					fetchedResource.Metadata.Error != nil &&
+					!req.Optional {
 					result.Summary.Errors = append(result.Summary.Errors, &FetchError{
 						ResourceRequest: req,
-						Error:          fetchedResource.Metadata.Error,
-						Timestamp:      fetchedResource.FetchedAt,
+						Error:           fetchedResource.Metadata.Error,
+						Timestamp:       fetchedResource.FetchedAt,
 					})
 				}
 			}
@@ -161,9 +161,9 @@ func (e *KubernetesEngine) FetchResources(requests []v1beta1.ResourceRequest) (*
 }
 
 // fetchSingleResource fetches a single resource with timeout
-func (e *KubernetesEngine) fetchSingleResource(ctx context.Context, 
+func (e *KubernetesEngine) fetchSingleResource(ctx context.Context,
 	req v1beta1.ResourceRequest) (*FetchedResource, error) {
-	
+
 	startTime := time.Now()
 	fetchedResource := &FetchedResource{
 		Request:   req,
@@ -227,7 +227,7 @@ func (e *KubernetesEngine) fetchSingleResource(ctx context.Context,
 		} else {
 			fetchedResource.Metadata.FetchStatus = FetchStatusError
 			fetchedResource.Metadata.Error = functionerrors.New(
-				functionerrors.ErrorCodeKubernetesClient, 
+				functionerrors.ErrorCodeKubernetesClient,
 				fmt.Sprintf("failed to fetch resource: %v", err)).
 				WithResource(resourceRef)
 		}
@@ -251,7 +251,7 @@ func (e *KubernetesEngine) getGVR(apiVersion, kind string) (schema.GroupVersionR
 		if err != nil {
 			return schema.GroupVersionResource{}, err
 		}
-		
+
 		return schema.GroupVersionResource{
 			Group:    gv.Group,
 			Version:  gv.Version,
@@ -261,7 +261,7 @@ func (e *KubernetesEngine) getGVR(apiVersion, kind string) (schema.GroupVersionR
 
 	// Fallback to basic pluralization for common cases
 	plural := e.pluralize(kind)
-	
+
 	gv, err := schema.ParseGroupVersion(apiVersion)
 	if err != nil {
 		return schema.GroupVersionResource{}, err
@@ -280,7 +280,7 @@ func (e *KubernetesEngine) pluralize(kind string) string {
 	if len(lower) == 0 {
 		return lower
 	}
-	
+
 	// Convert to lowercase for resource names
 	plural := ""
 	for i, r := range lower {
@@ -290,15 +290,15 @@ func (e *KubernetesEngine) pluralize(kind string) string {
 			plural += string(r)
 		}
 	}
-	
+
 	// Basic pluralization rules
 	switch {
 	case len(plural) > 2 && plural[len(plural)-2:] == "ey":
 		return plural + "s"
 	case len(plural) > 0 && plural[len(plural)-1] == 'y':
 		return plural[:len(plural)-1] + "ies"
-	case len(plural) > 0 && (plural[len(plural)-1] == 's' || 
-		plural[len(plural)-1] == 'x' || 
+	case len(plural) > 0 && (plural[len(plural)-1] == 's' ||
+		plural[len(plural)-1] == 'x' ||
 		plural[len(plural)-1] == 'z'):
 		return plural + "es"
 	case len(plural) > 2 && plural[len(plural)-2:] == "ch":

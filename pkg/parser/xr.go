@@ -104,7 +104,7 @@ func (p *DefaultXRParser) validateRequest(request v1beta1.ResourceRequest, index
 	// Validate 'into' field naming convention
 	if !isValidFieldName(request.Into) {
 		return errors.ValidationError(
-			fmt.Sprintf("fetchResources[%d].into '%s' must be a valid field name (alphanumeric + underscore, start with letter)", 
+			fmt.Sprintf("fetchResources[%d].into '%s' must be a valid field name (alphanumeric + underscore, start with letter)",
 				index, request.Into))
 	}
 
@@ -126,8 +126,8 @@ func isValidFieldName(name string) bool {
 	// Remaining characters must be alphanumeric or underscore
 	for i := 1; i < len(name); i++ {
 		c := name[i]
-		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || 
-			 (c >= '0' && c <= '9') || c == '_') {
+		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+			(c >= '0' && c <= '9') || c == '_') {
 			return false
 		}
 	}

@@ -25,35 +25,35 @@ type FieldSchema struct {
 
 // ResourceReference describes a reference to another resource
 type ResourceReference struct {
-	FieldPath    string `json:"fieldPath"`    // JSONPath to the field
-	TargetKind   string `json:"targetKind"`   // Kind of referenced resource
-	TargetGroup  string `json:"targetGroup"`  // Group of referenced resource
-	RefType      RefType `json:"refType"`     // Type of reference
+	FieldPath   string  `json:"fieldPath"`   // JSONPath to the field
+	TargetKind  string  `json:"targetKind"`  // Kind of referenced resource
+	TargetGroup string  `json:"targetGroup"` // Group of referenced resource
+	RefType     RefType `json:"refType"`     // Type of reference
 }
 
 // RefType represents the type of reference relationship
 type RefType string
 
 const (
-	RefTypeOwnerRef   RefType = "ownerRef"   // metadata.ownerReferences
-	RefTypeConfigMap  RefType = "configMap"  // Reference to ConfigMap
-	RefTypeSecret     RefType = "secret"     // Reference to Secret
-	RefTypeService    RefType = "service"    // Reference to Service
-	RefTypePVC        RefType = "pvc"        // Reference to PersistentVolumeClaim
-	RefTypeCustom     RefType = "custom"     // Custom reference (platform-specific)
+	RefTypeOwnerRef  RefType = "ownerRef"  // metadata.ownerReferences
+	RefTypeConfigMap RefType = "configMap" // Reference to ConfigMap
+	RefTypeSecret    RefType = "secret"    // Reference to Secret
+	RefTypeService   RefType = "service"   // Reference to Service
+	RefTypePVC       RefType = "pvc"       // Reference to PersistentVolumeClaim
+	RefTypeCustom    RefType = "custom"    // Custom reference (platform-specific)
 )
 
 // Registry defines the interface for resource type registry
 type Registry interface {
 	// GetResourceType returns metadata for a given resource type
 	GetResourceType(apiVersion, kind string) (*ResourceType, error)
-	
+
 	// ListResourceTypes returns all registered resource types
 	ListResourceTypes() ([]*ResourceType, error)
-	
+
 	// IsNamespaced returns whether a resource type is namespaced
 	IsNamespaced(apiVersion, kind string) (bool, error)
-	
+
 	// GetReferences returns all reference relationships for a resource type
 	GetReferences(apiVersion, kind string) ([]ResourceReference, error)
 }

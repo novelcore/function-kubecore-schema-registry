@@ -3,7 +3,7 @@ package traversal
 import (
 	"sync"
 	"time"
-	
+
 	"k8s.io/apimachinery/pkg/types"
 )
 
@@ -11,19 +11,19 @@ import (
 type ResourceTracker struct {
 	// processedResources maps resource IDs to processing information
 	processedResources map[string]*ProcessedResourceInfo
-	
+
 	// processingOrder tracks the order in which resources were processed
 	processingOrder []string
-	
+
 	// uidIndex maps UIDs to resource IDs for deduplication
 	uidIndex map[types.UID]string
-	
+
 	// depthIndex groups resources by their discovery depth
 	depthIndex map[int][]string
-	
+
 	// mu protects access to the tracker
 	mu sync.RWMutex
-	
+
 	// startTime tracks when tracking started
 	startTime time.Time
 }
@@ -32,31 +32,31 @@ type ResourceTracker struct {
 type ProcessedResourceInfo struct {
 	// ResourceID is the unique identifier for the resource
 	ResourceID string
-	
+
 	// UID is the Kubernetes resource UID
 	UID types.UID
-	
+
 	// ProcessedAt indicates when the resource was processed
 	ProcessedAt time.Time
-	
+
 	// Depth is the depth at which the resource was discovered
 	Depth int
-	
+
 	// ProcessingCount is the number of times this resource has been processed
 	ProcessingCount int
-	
+
 	// LastProcessedAt is when the resource was last processed
 	LastProcessedAt time.Time
-	
+
 	// DiscoveryPath contains the path from root to this resource
 	DiscoveryPath []string
-	
+
 	// ReferenceCount is the number of references found in this resource
 	ReferenceCount int
-	
+
 	// ProcessingTime is the time taken to process this resource
 	ProcessingTime time.Duration
-	
+
 	// Metadata contains additional processing metadata
 	Metadata map[string]interface{}
 }
@@ -65,25 +65,25 @@ type ProcessedResourceInfo struct {
 type ResourceTrackerStats struct {
 	// TotalResources is the total number of unique resources tracked
 	TotalResources int
-	
+
 	// ResourcesByDepth groups resources by their discovery depth
 	ResourcesByDepth map[int]int
-	
+
 	// DuplicateAttempts is the number of duplicate processing attempts prevented
 	DuplicateAttempts int
-	
+
 	// AverageProcessingTime is the average time taken to process resources
 	AverageProcessingTime time.Duration
-	
+
 	// TotalProcessingTime is the total time spent processing all resources
 	TotalProcessingTime time.Duration
-	
+
 	// TrackingDuration is the total duration of tracking
 	TrackingDuration time.Duration
-	
+
 	// MaxDepth is the maximum depth reached during traversal
 	MaxDepth int
-	
+
 	// UniqueUIDs is the number of unique resource UIDs tracked
 	UniqueUIDs int
 }
@@ -93,9 +93,9 @@ func NewResourceTracker() *ResourceTracker {
 	return &ResourceTracker{
 		processedResources: make(map[string]*ProcessedResourceInfo),
 		processingOrder:    make([]string, 0),
-		uidIndex:          make(map[types.UID]string),
-		depthIndex:        make(map[int][]string),
-		startTime:         time.Now(),
+		uidIndex:           make(map[types.UID]string),
+		depthIndex:         make(map[int][]string),
+		startTime:          time.Now(),
 	}
 }
 
@@ -103,7 +103,7 @@ func NewResourceTracker() *ResourceTracker {
 func (rt *ResourceTracker) IsProcessed(resourceID string) bool {
 	rt.mu.RLock()
 	defer rt.mu.RUnlock()
-	
+
 	_, exists := rt.processedResources[resourceID]
 	return exists
 }
@@ -112,7 +112,7 @@ func (rt *ResourceTracker) IsProcessed(resourceID string) bool {
 func (rt *ResourceTracker) IsProcessedByUID(uid types.UID) bool {
 	rt.mu.RLock()
 	defer rt.mu.RUnlock()
-	
+
 	_, exists := rt.uidIndex[uid]
 	return exists
 }
@@ -121,16 +121,16 @@ func (rt *ResourceTracker) IsProcessedByUID(uid types.UID) bool {
 func (rt *ResourceTracker) MarkProcessed(resourceID string, depth int) {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
-	
+
 	now := time.Now()
-	
+
 	if info, exists := rt.processedResources[resourceID]; exists {
 		// Update existing entry
 		info.ProcessingCount++
 		info.LastProcessedAt = now
 		return
 	}
-	
+
 	// Create new entry
 	info := &ProcessedResourceInfo{
 		ResourceID:      resourceID,
@@ -141,10 +141,10 @@ func (rt *ResourceTracker) MarkProcessed(resourceID string, depth int) {
 		DiscoveryPath:   make([]string, 0),
 		Metadata:        make(map[string]interface{}),
 	}
-	
+
 	rt.processedResources[resourceID] = info
 	rt.processingOrder = append(rt.processingOrder, resourceID)
-	
+
 	// Add to depth index
 	rt.depthIndex[depth] = append(rt.depthIndex[depth], resourceID)
 }
@@ -153,9 +153,9 @@ func (rt *ResourceTracker) MarkProcessed(resourceID string, depth int) {
 func (rt *ResourceTracker) MarkProcessedWithUID(resourceID string, uid types.UID, depth int) {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
-	
+
 	now := time.Now()
-	
+
 	// Check if UID already exists
 	if existingID, exists := rt.uidIndex[uid]; exists {
 		if existingID != resourceID {
@@ -167,7 +167,7 @@ func (rt *ResourceTracker) MarkProcessedWithUID(resourceID string, uid types.UID
 			}
 		}
 	}
-	
+
 	if info, exists := rt.processedResources[resourceID]; exists {
 		// Update existing entry
 		info.UID = uid
@@ -176,7 +176,7 @@ func (rt *ResourceTracker) MarkProcessedWithUID(resourceID string, uid types.UID
 		rt.uidIndex[uid] = resourceID
 		return
 	}
-	
+
 	// Create new entry
 	info := &ProcessedResourceInfo{
 		ResourceID:      resourceID,
@@ -188,11 +188,11 @@ func (rt *ResourceTracker) MarkProcessedWithUID(resourceID string, uid types.UID
 		DiscoveryPath:   make([]string, 0),
 		Metadata:        make(map[string]interface{}),
 	}
-	
+
 	rt.processedResources[resourceID] = info
 	rt.processingOrder = append(rt.processingOrder, resourceID)
 	rt.uidIndex[uid] = resourceID
-	
+
 	// Add to depth index
 	rt.depthIndex[depth] = append(rt.depthIndex[depth], resourceID)
 }
@@ -201,7 +201,7 @@ func (rt *ResourceTracker) MarkProcessedWithUID(resourceID string, uid types.UID
 func (rt *ResourceTracker) SetDiscoveryPath(resourceID string, path []string) {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
-	
+
 	if info, exists := rt.processedResources[resourceID]; exists {
 		info.DiscoveryPath = make([]string, len(path))
 		copy(info.DiscoveryPath, path)
@@ -212,7 +212,7 @@ func (rt *ResourceTracker) SetDiscoveryPath(resourceID string, path []string) {
 func (rt *ResourceTracker) SetReferenceCount(resourceID string, count int) {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
-	
+
 	if info, exists := rt.processedResources[resourceID]; exists {
 		info.ReferenceCount = count
 	}
@@ -222,7 +222,7 @@ func (rt *ResourceTracker) SetReferenceCount(resourceID string, count int) {
 func (rt *ResourceTracker) SetProcessingTime(resourceID string, duration time.Duration) {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
-	
+
 	if info, exists := rt.processedResources[resourceID]; exists {
 		info.ProcessingTime = duration
 	}
@@ -232,7 +232,7 @@ func (rt *ResourceTracker) SetProcessingTime(resourceID string, duration time.Du
 func (rt *ResourceTracker) SetMetadata(resourceID string, key string, value interface{}) {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
-	
+
 	if info, exists := rt.processedResources[resourceID]; exists {
 		info.Metadata[key] = value
 	}
@@ -242,7 +242,7 @@ func (rt *ResourceTracker) SetMetadata(resourceID string, key string, value inte
 func (rt *ResourceTracker) GetProcessedResource(resourceID string) *ProcessedResourceInfo {
 	rt.mu.RLock()
 	defer rt.mu.RUnlock()
-	
+
 	if info, exists := rt.processedResources[resourceID]; exists {
 		// Return a copy to prevent external modification
 		infoCopy := *info
@@ -254,7 +254,7 @@ func (rt *ResourceTracker) GetProcessedResource(resourceID string) *ProcessedRes
 		}
 		return &infoCopy
 	}
-	
+
 	return nil
 }
 
@@ -262,13 +262,13 @@ func (rt *ResourceTracker) GetProcessedResource(resourceID string) *ProcessedRes
 func (rt *ResourceTracker) GetResourcesByDepth(depth int) []string {
 	rt.mu.RLock()
 	defer rt.mu.RUnlock()
-	
+
 	if resources, exists := rt.depthIndex[depth]; exists {
 		result := make([]string, len(resources))
 		copy(result, resources)
 		return result
 	}
-	
+
 	return nil
 }
 
@@ -276,7 +276,7 @@ func (rt *ResourceTracker) GetResourcesByDepth(depth int) []string {
 func (rt *ResourceTracker) GetProcessingOrder() []string {
 	rt.mu.RLock()
 	defer rt.mu.RUnlock()
-	
+
 	result := make([]string, len(rt.processingOrder))
 	copy(result, rt.processingOrder)
 	return result
@@ -286,14 +286,14 @@ func (rt *ResourceTracker) GetProcessingOrder() []string {
 func (rt *ResourceTracker) GetStats() *ResourceTrackerStats {
 	rt.mu.RLock()
 	defer rt.mu.RUnlock()
-	
+
 	stats := &ResourceTrackerStats{
 		TotalResources:   len(rt.processedResources),
 		ResourcesByDepth: make(map[int]int),
 		UniqueUIDs:       len(rt.uidIndex),
 		TrackingDuration: time.Since(rt.startTime),
 	}
-	
+
 	// Calculate depth distribution
 	for depth, resources := range rt.depthIndex {
 		stats.ResourcesByDepth[depth] = len(resources)
@@ -301,25 +301,25 @@ func (rt *ResourceTracker) GetStats() *ResourceTrackerStats {
 			stats.MaxDepth = depth
 		}
 	}
-	
+
 	// Calculate processing time statistics
 	var totalProcessingTime time.Duration
 	duplicateAttempts := 0
-	
+
 	for _, info := range rt.processedResources {
 		totalProcessingTime += info.ProcessingTime
 		if info.ProcessingCount > 1 {
 			duplicateAttempts += info.ProcessingCount - 1
 		}
 	}
-	
+
 	stats.TotalProcessingTime = totalProcessingTime
 	stats.DuplicateAttempts = duplicateAttempts
-	
+
 	if len(rt.processedResources) > 0 {
 		stats.AverageProcessingTime = totalProcessingTime / time.Duration(len(rt.processedResources))
 	}
-	
+
 	return stats
 }
 
@@ -327,7 +327,7 @@ func (rt *ResourceTracker) GetStats() *ResourceTrackerStats {
 func (rt *ResourceTracker) Reset() {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
-	
+
 	rt.processedResources = make(map[string]*ProcessedResourceInfo)
 	rt.processingOrder = make([]string, 0)
 	rt.uidIndex = make(map[types.UID]string)
@@ -339,7 +339,7 @@ func (rt *ResourceTracker) Reset() {
 func (rt *ResourceTracker) Size() int {
 	rt.mu.RLock()
 	defer rt.mu.RUnlock()
-	
+
 	return len(rt.processedResources)
 }
 
@@ -347,13 +347,13 @@ func (rt *ResourceTracker) Size() int {
 func (rt *ResourceTracker) HasDuplicates() bool {
 	rt.mu.RLock()
 	defer rt.mu.RUnlock()
-	
+
 	for _, info := range rt.processedResources {
 		if info.ProcessingCount > 1 {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -361,15 +361,15 @@ func (rt *ResourceTracker) HasDuplicates() bool {
 func (rt *ResourceTracker) GetDuplicates() []string {
 	rt.mu.RLock()
 	defer rt.mu.RUnlock()
-	
+
 	var duplicates []string
-	
+
 	for resourceID, info := range rt.processedResources {
 		if info.ProcessingCount > 1 {
 			duplicates = append(duplicates, resourceID)
 		}
 	}
-	
+
 	return duplicates
 }
 
@@ -377,14 +377,14 @@ func (rt *ResourceTracker) GetDuplicates() []string {
 func (rt *ResourceTracker) GetMaxDepth() int {
 	rt.mu.RLock()
 	defer rt.mu.RUnlock()
-	
+
 	maxDepth := 0
 	for depth := range rt.depthIndex {
 		if depth > maxDepth {
 			maxDepth = depth
 		}
 	}
-	
+
 	return maxDepth
 }
 
@@ -392,7 +392,7 @@ func (rt *ResourceTracker) GetMaxDepth() int {
 func (rt *ResourceTracker) IsAtDepth(depth int) bool {
 	rt.mu.RLock()
 	defer rt.mu.RUnlock()
-	
+
 	resources, exists := rt.depthIndex[depth]
 	return exists && len(resources) > 0
 }
@@ -401,11 +401,11 @@ func (rt *ResourceTracker) IsAtDepth(depth int) bool {
 func (rt *ResourceTracker) CountAtDepth(depth int) int {
 	rt.mu.RLock()
 	defer rt.mu.RUnlock()
-	
+
 	if resources, exists := rt.depthIndex[depth]; exists {
 		return len(resources)
 	}
-	
+
 	return 0
 }
 
@@ -413,7 +413,7 @@ func (rt *ResourceTracker) CountAtDepth(depth int) int {
 func (rt *ResourceTracker) GetResourceIDByUID(uid types.UID) (string, bool) {
 	rt.mu.RLock()
 	defer rt.mu.RUnlock()
-	
+
 	resourceID, exists := rt.uidIndex[uid]
 	return resourceID, exists
 }

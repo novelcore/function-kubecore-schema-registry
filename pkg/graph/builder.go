@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"strings"
 	"time"
-	
+
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
-	
+
 	"github.com/crossplane/function-kubecore-schema-registry/pkg/dynamic"
 )
 
@@ -15,19 +15,19 @@ import (
 type GraphBuilder interface {
 	// NewGraph creates a new empty resource graph
 	NewGraph() *ResourceGraph
-	
+
 	// AddNode adds a resource node to the graph
 	AddNode(graph *ResourceGraph, resource *unstructured.Unstructured, depth int, discoveryPath []NodeID) *ResourceNode
-	
+
 	// AddEdge adds a relationship edge between two nodes
 	AddEdge(graph *ResourceGraph, source, target NodeID, relationType RelationType, fieldPath, fieldName string, confidence float64) *ResourceEdge
-	
+
 	// BuildGraph builds a graph from a set of root resources and their references
 	BuildGraph(rootResources []*unstructured.Unstructured, references map[string][]dynamic.ReferenceField) (*ResourceGraph, error)
-	
+
 	// MergeGraphs merges multiple graphs into a single graph
 	MergeGraphs(graphs []*ResourceGraph) (*ResourceGraph, error)
-	
+
 	// ValidateGraph validates the integrity of the graph
 	ValidateGraph(graph *ResourceGraph) *GraphValidationResult
 }
@@ -70,7 +70,7 @@ func (gb *DefaultGraphBuilder) NewGraph() *ResourceGraph {
 // AddNode adds a resource node to the graph
 func (gb *DefaultGraphBuilder) AddNode(graph *ResourceGraph, resource *unstructured.Unstructured, depth int, discoveryPath []NodeID) *ResourceNode {
 	nodeID := gb.generateNodeID(resource)
-	
+
 	// Check if node already exists (deduplication by UID)
 	if existingNode, exists := graph.Nodes[nodeID]; exists {
 		// Update discovery path if this is a shorter path
@@ -80,7 +80,7 @@ func (gb *DefaultGraphBuilder) AddNode(graph *ResourceGraph, resource *unstructu
 		}
 		return existingNode
 	}
-	
+
 	// Create new node
 	node := &ResourceNode{
 		ID:             nodeID,
@@ -91,19 +91,19 @@ func (gb *DefaultGraphBuilder) AddNode(graph *ResourceGraph, resource *unstructu
 		DiscoveryPath:  discoveryPath,
 		Platform:       gb.platformChecker.IsPlatformResource(resource),
 		Metadata: &NodeMetadata{
-			APIGroup:         gb.extractAPIGroup(resource.GetAPIVersion()),
-			Kind:             resource.GetKind(),
-			Namespace:        resource.GetNamespace(),
-			Name:             resource.GetName(),
+			APIGroup:          gb.extractAPIGroup(resource.GetAPIVersion()),
+			Kind:              resource.GetKind(),
+			Namespace:         resource.GetNamespace(),
+			Name:              resource.GetName(),
 			SkippedReferences: make([]SkippedReference, 0),
 		},
 	}
-	
+
 	// Add to graph
 	graph.Nodes[nodeID] = node
 	graph.AdjacencyList[nodeID] = make([]EdgeID, 0)
 	graph.ReverseAdjacencyList[nodeID] = make([]EdgeID, 0)
-	
+
 	// Update graph metadata
 	graph.Metadata.TotalNodes++
 	if node.Platform {
@@ -114,26 +114,26 @@ func (gb *DefaultGraphBuilder) AddNode(graph *ResourceGraph, resource *unstructu
 	if depth > graph.Metadata.MaxDepth {
 		graph.Metadata.MaxDepth = depth
 	}
-	
+
 	return node
 }
 
 // AddEdge adds a relationship edge between two nodes
 func (gb *DefaultGraphBuilder) AddEdge(graph *ResourceGraph, source, target NodeID, relationType RelationType, fieldPath, fieldName string, confidence float64) *ResourceEdge {
 	edgeID := gb.generateEdgeID(source, target, fieldPath)
-	
+
 	// Check if edge already exists
 	if existingEdge, exists := graph.Edges[edgeID]; exists {
 		return existingEdge
 	}
-	
+
 	// Verify both nodes exist
 	sourceNode, sourceExists := graph.Nodes[source]
 	targetNode, targetExists := graph.Nodes[target]
 	if !sourceExists || !targetExists {
 		return nil
 	}
-	
+
 	// Create new edge
 	edge := &ResourceEdge{
 		ID:              edgeID,
@@ -150,32 +150,32 @@ func (gb *DefaultGraphBuilder) AddEdge(graph *ResourceGraph, source, target Node
 			TargetExists:     true,
 		},
 	}
-	
+
 	// Add to graph
 	graph.Edges[edgeID] = edge
 	graph.AdjacencyList[source] = append(graph.AdjacencyList[source], edgeID)
 	graph.ReverseAdjacencyList[target] = append(graph.ReverseAdjacencyList[target], edgeID)
-	
+
 	// Update node metadata
 	sourceNode.Metadata.OutboundReferenceCount++
 	targetNode.Metadata.InboundReferenceCount++
-	
+
 	// Update graph metadata
 	graph.Metadata.TotalEdges++
-	
+
 	return edge
 }
 
 // BuildGraph builds a graph from a set of root resources and their references
 func (gb *DefaultGraphBuilder) BuildGraph(rootResources []*unstructured.Unstructured, references map[string][]dynamic.ReferenceField) (*ResourceGraph, error) {
 	graph := gb.NewGraph()
-	
+
 	// Add root nodes
 	for _, resource := range rootResources {
 		node := gb.AddNode(graph, resource, 0, []NodeID{})
 		graph.Metadata.RootNodes = append(graph.Metadata.RootNodes, node.ID)
 	}
-	
+
 	// Build edges based on reference information
 	for resourceKey, refFields := range references {
 		sourceNodeID := NodeID(resourceKey)
@@ -183,19 +183,19 @@ func (gb *DefaultGraphBuilder) BuildGraph(rootResources []*unstructured.Unstruct
 		if !exists {
 			continue
 		}
-		
+
 		for _, refField := range refFields {
 			// Determine relation type from reference field
 			relationType := gb.mapReferenceTypeToRelationType(refField.RefType)
-			
+
 			// For building graphs from discovered references, we need target resources
 			// This method assumes all referenced resources are provided in the references map
 			// In practice, this would be called after traversal has resolved all references
-			
+
 			// Add edge (target node should exist if traversal was complete)
 			targetKey := gb.buildTargetResourceKey(refField.TargetKind, refField.TargetGroup, sourceNode.Metadata.Namespace)
 			targetNodeID := NodeID(targetKey)
-			
+
 			if _, targetExists := graph.Nodes[targetNodeID]; targetExists {
 				gb.AddEdge(graph, sourceNodeID, targetNodeID, relationType, refField.FieldPath, refField.FieldName, refField.Confidence)
 			} else {
@@ -210,7 +210,7 @@ func (gb *DefaultGraphBuilder) BuildGraph(rootResources []*unstructured.Unstruct
 			}
 		}
 	}
-	
+
 	return graph, nil
 }
 
@@ -219,14 +219,14 @@ func (gb *DefaultGraphBuilder) MergeGraphs(graphs []*ResourceGraph) (*ResourceGr
 	if len(graphs) == 0 {
 		return gb.NewGraph(), nil
 	}
-	
+
 	if len(graphs) == 1 {
 		return graphs[0], nil
 	}
-	
+
 	mergedGraph := gb.NewGraph()
 	nodeMapping := make(map[NodeID]NodeID) // Original to merged mapping
-	
+
 	// Merge all nodes (deduplicating by UID)
 	uidToNodeID := make(map[types.UID]NodeID)
 	for _, graph := range graphs {
@@ -248,29 +248,29 @@ func (gb *DefaultGraphBuilder) MergeGraphs(graphs []*ResourceGraph) (*ResourceGr
 			}
 		}
 	}
-	
+
 	// Merge all edges (using node mapping)
 	edgeSet := make(map[string]bool) // Deduplication set
 	for _, graph := range graphs {
 		for _, edge := range graph.Edges {
 			mappedSource, sourceExists := nodeMapping[edge.Source]
 			mappedTarget, targetExists := nodeMapping[edge.Target]
-			
+
 			if !sourceExists || !targetExists {
 				continue
 			}
-			
+
 			// Create deduplication key
 			edgeKey := fmt.Sprintf("%s->%s:%s", mappedSource, mappedTarget, edge.FieldPath)
 			if edgeSet[edgeKey] {
 				continue
 			}
-			
+
 			gb.AddEdge(mergedGraph, mappedSource, mappedTarget, edge.RelationType, edge.FieldPath, edge.FieldName, edge.Confidence)
 			edgeSet[edgeKey] = true
 		}
 	}
-	
+
 	// Merge root nodes
 	rootNodeSet := make(map[NodeID]bool)
 	for _, graph := range graphs {
@@ -283,7 +283,7 @@ func (gb *DefaultGraphBuilder) MergeGraphs(graphs []*ResourceGraph) (*ResourceGr
 			}
 		}
 	}
-	
+
 	// Merge cycles
 	for _, graph := range graphs {
 		for _, cycle := range graph.Metadata.CyclesDetected {
@@ -294,21 +294,21 @@ func (gb *DefaultGraphBuilder) MergeGraphs(graphs []*ResourceGraph) (*ResourceGr
 				Nodes:      make([]NodeID, 0, len(cycle.Nodes)),
 				Edges:      make([]EdgeID, 0, len(cycle.Edges)),
 			}
-			
+
 			// Remap nodes
 			for _, nodeID := range cycle.Nodes {
 				if mappedNodeID, exists := nodeMapping[nodeID]; exists {
 					mappedCycle.Nodes = append(mappedCycle.Nodes, mappedNodeID)
 				}
 			}
-			
+
 			// Note: Edge remapping is more complex and would require edge mapping
 			// For now, we'll skip detailed edge remapping in cycles
-			
+
 			mergedGraph.Metadata.CyclesDetected = append(mergedGraph.Metadata.CyclesDetected, mappedCycle)
 		}
 	}
-	
+
 	return mergedGraph, nil
 }
 
@@ -323,33 +323,33 @@ func (gb *DefaultGraphBuilder) ValidateGraph(graph *ResourceGraph) *GraphValidat
 			EdgesValidated: len(graph.Edges),
 		},
 	}
-	
+
 	startTime := time.Now()
-	
+
 	// Validate nodes
 	for nodeID, node := range graph.Nodes {
 		gb.validateNode(nodeID, node, result)
 	}
-	
+
 	// Validate edges
 	for edgeID, edge := range graph.Edges {
 		gb.validateEdge(edgeID, edge, graph, result)
 	}
-	
+
 	// Validate adjacency lists
 	gb.validateAdjacencyLists(graph, result)
-	
+
 	// Validate graph metadata consistency
 	gb.validateGraphMetadata(graph, result)
-	
+
 	result.Statistics.ValidationTime = time.Since(startTime)
 	result.Statistics.ErrorCount = len(result.Errors)
 	result.Statistics.WarningCount = len(result.Warnings)
-	
+
 	if len(result.Errors) > 0 {
 		result.Valid = false
 	}
-	
+
 	return result
 }
 
@@ -357,10 +357,10 @@ func (gb *DefaultGraphBuilder) ValidateGraph(graph *ResourceGraph) *GraphValidat
 
 func (gb *DefaultGraphBuilder) generateNodeID(resource *unstructured.Unstructured) NodeID {
 	// Generate a unique node ID based on resource identity
-	return NodeID(fmt.Sprintf("%s/%s/%s/%s", 
-		resource.GetAPIVersion(), 
-		resource.GetKind(), 
-		resource.GetNamespace(), 
+	return NodeID(fmt.Sprintf("%s/%s/%s/%s",
+		resource.GetAPIVersion(),
+		resource.GetKind(),
+		resource.GetNamespace(),
 		resource.GetName()))
 }
 
@@ -412,7 +412,7 @@ func (gb *DefaultGraphBuilder) validateNode(nodeID NodeID, node *ResourceNode, r
 			NodeID:  &nodeID,
 		})
 	}
-	
+
 	// Validate required fields
 	if node.Resource == nil {
 		result.Errors = append(result.Errors, GraphValidationError{
@@ -421,7 +421,7 @@ func (gb *DefaultGraphBuilder) validateNode(nodeID NodeID, node *ResourceNode, r
 			NodeID:  &nodeID,
 		})
 	}
-	
+
 	if node.Metadata == nil {
 		result.Errors = append(result.Errors, GraphValidationError{
 			Type:    "missing_metadata",
@@ -429,7 +429,7 @@ func (gb *DefaultGraphBuilder) validateNode(nodeID NodeID, node *ResourceNode, r
 			NodeID:  &nodeID,
 		})
 	}
-	
+
 	// Validate discovery depth
 	if node.DiscoveryDepth < 0 {
 		result.Warnings = append(result.Warnings, GraphValidationWarning{
@@ -449,7 +449,7 @@ func (gb *DefaultGraphBuilder) validateEdge(edgeID EdgeID, edge *ResourceEdge, g
 			EdgeID:  &edgeID,
 		})
 	}
-	
+
 	// Validate source node exists
 	if _, exists := graph.Nodes[edge.Source]; !exists {
 		result.Errors = append(result.Errors, GraphValidationError{
@@ -458,7 +458,7 @@ func (gb *DefaultGraphBuilder) validateEdge(edgeID EdgeID, edge *ResourceEdge, g
 			EdgeID:  &edgeID,
 		})
 	}
-	
+
 	// Validate target node exists
 	if _, exists := graph.Nodes[edge.Target]; !exists {
 		result.Errors = append(result.Errors, GraphValidationError{
@@ -467,7 +467,7 @@ func (gb *DefaultGraphBuilder) validateEdge(edgeID EdgeID, edge *ResourceEdge, g
 			EdgeID:  &edgeID,
 		})
 	}
-	
+
 	// Validate confidence range
 	if edge.Confidence < 0 || edge.Confidence > 1 {
 		result.Warnings = append(result.Warnings, GraphValidationWarning{
@@ -487,7 +487,7 @@ func (gb *DefaultGraphBuilder) validateAdjacencyLists(graph *ResourceGraph, resu
 				Message: fmt.Sprintf("Adjacency list contains entry for non-existent node: %s", nodeID),
 			})
 		}
-		
+
 		for _, edgeID := range edgeIDs {
 			edge, exists := graph.Edges[edgeID]
 			if !exists {
@@ -497,7 +497,7 @@ func (gb *DefaultGraphBuilder) validateAdjacencyLists(graph *ResourceGraph, resu
 				})
 				continue
 			}
-			
+
 			if edge.Source != nodeID {
 				result.Errors = append(result.Errors, GraphValidationError{
 					Type:    "adjacency_source_mismatch",
@@ -506,7 +506,7 @@ func (gb *DefaultGraphBuilder) validateAdjacencyLists(graph *ResourceGraph, resu
 			}
 		}
 	}
-	
+
 	// Validate reverse adjacency list
 	for nodeID, edgeIDs := range graph.ReverseAdjacencyList {
 		if _, exists := graph.Nodes[nodeID]; !exists {
@@ -515,7 +515,7 @@ func (gb *DefaultGraphBuilder) validateAdjacencyLists(graph *ResourceGraph, resu
 				Message: fmt.Sprintf("Reverse adjacency list contains entry for non-existent node: %s", nodeID),
 			})
 		}
-		
+
 		for _, edgeID := range edgeIDs {
 			edge, exists := graph.Edges[edgeID]
 			if !exists {
@@ -525,7 +525,7 @@ func (gb *DefaultGraphBuilder) validateAdjacencyLists(graph *ResourceGraph, resu
 				})
 				continue
 			}
-			
+
 			if edge.Target != nodeID {
 				result.Errors = append(result.Errors, GraphValidationError{
 					Type:    "reverse_adjacency_target_mismatch",
@@ -545,7 +545,7 @@ func (gb *DefaultGraphBuilder) validateGraphMetadata(graph *ResourceGraph, resul
 			Message: fmt.Sprintf("Metadata TotalNodes (%d) doesn't match actual nodes (%d)", graph.Metadata.TotalNodes, expectedTotalNodes),
 		})
 	}
-	
+
 	// Validate edge counts
 	expectedTotalEdges := len(graph.Edges)
 	if graph.Metadata.TotalEdges != expectedTotalEdges {
@@ -554,7 +554,7 @@ func (gb *DefaultGraphBuilder) validateGraphMetadata(graph *ResourceGraph, resul
 			Message: fmt.Sprintf("Metadata TotalEdges (%d) doesn't match actual edges (%d)", graph.Metadata.TotalEdges, expectedTotalEdges),
 		})
 	}
-	
+
 	// Validate platform node count
 	platformCount := 0
 	for _, node := range graph.Nodes {
@@ -568,7 +568,7 @@ func (gb *DefaultGraphBuilder) validateGraphMetadata(graph *ResourceGraph, resul
 			Message: fmt.Sprintf("Metadata PlatformNodes (%d) doesn't match actual platform nodes (%d)", graph.Metadata.PlatformNodes, platformCount),
 		})
 	}
-	
+
 	// Validate root nodes exist
 	for _, rootNodeID := range graph.Metadata.RootNodes {
 		if _, exists := graph.Nodes[rootNodeID]; !exists {

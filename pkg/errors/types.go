@@ -13,20 +13,20 @@ type ErrorCode string
 
 const (
 	// Resource fetch errors
-	ErrorCodeResourceNotFound     ErrorCode = "RESOURCE_NOT_FOUND"
-	ErrorCodeResourceForbidden    ErrorCode = "RESOURCE_FORBIDDEN"
-	ErrorCodeResourceTimeout      ErrorCode = "RESOURCE_TIMEOUT"
-	ErrorCodeResourceUnavailable  ErrorCode = "RESOURCE_UNAVAILABLE"
-	
+	ErrorCodeResourceNotFound    ErrorCode = "RESOURCE_NOT_FOUND"
+	ErrorCodeResourceForbidden   ErrorCode = "RESOURCE_FORBIDDEN"
+	ErrorCodeResourceTimeout     ErrorCode = "RESOURCE_TIMEOUT"
+	ErrorCodeResourceUnavailable ErrorCode = "RESOURCE_UNAVAILABLE"
+
 	// Input validation errors
-	ErrorCodeInvalidInput         ErrorCode = "INVALID_INPUT"
-	ErrorCodeInvalidResourceRef   ErrorCode = "INVALID_RESOURCE_REF"
-	
+	ErrorCodeInvalidInput       ErrorCode = "INVALID_INPUT"
+	ErrorCodeInvalidResourceRef ErrorCode = "INVALID_RESOURCE_REF"
+
 	// System errors
-	ErrorCodeKubernetesClient     ErrorCode = "KUBERNETES_CLIENT_ERROR"
-	ErrorCodeInternalError        ErrorCode = "INTERNAL_ERROR"
-	ErrorCodeTimeout              ErrorCode = "TIMEOUT"
-	
+	ErrorCodeKubernetesClient ErrorCode = "KUBERNETES_CLIENT_ERROR"
+	ErrorCodeInternalError    ErrorCode = "INTERNAL_ERROR"
+	ErrorCodeTimeout          ErrorCode = "TIMEOUT"
+
 	// Phase 2 specific errors
 	ErrorCodeInvalidSelector      ErrorCode = "INVALID_SELECTOR"
 	ErrorCodeInvalidExpression    ErrorCode = "INVALID_EXPRESSION"
@@ -58,24 +58,24 @@ type ResourceRef struct {
 // Error implements the error interface
 func (e *FunctionError) Error() string {
 	var parts []string
-	
+
 	if e.ResourceRef != nil {
 		if e.ResourceRef.Namespace != "" {
-			parts = append(parts, fmt.Sprintf("resource %s/%s/%s (%s)", 
+			parts = append(parts, fmt.Sprintf("resource %s/%s/%s (%s)",
 				e.ResourceRef.Kind, e.ResourceRef.Namespace, e.ResourceRef.Name, e.ResourceRef.Into))
 		} else {
-			parts = append(parts, fmt.Sprintf("resource %s/%s (%s)", 
+			parts = append(parts, fmt.Sprintf("resource %s/%s (%s)",
 				e.ResourceRef.Kind, e.ResourceRef.Name, e.ResourceRef.Into))
 		}
 	}
-	
+
 	parts = append(parts, string(e.Code))
 	parts = append(parts, e.Message)
-	
+
 	if e.Cause != nil {
 		parts = append(parts, fmt.Sprintf("cause: %s", e.Cause.Error()))
 	}
-	
+
 	return strings.Join(parts, ": ")
 }
 
@@ -99,7 +99,7 @@ func Wrap(err error, message string) error {
 	if err == nil {
 		return nil
 	}
-	
+
 	// If it's already a FunctionError, wrap it
 	if fe, ok := err.(*FunctionError); ok {
 		return &FunctionError{
@@ -110,7 +110,7 @@ func Wrap(err error, message string) error {
 			Cause:     fe,
 		}
 	}
-	
+
 	// Use standard errors.Wrap for non-FunctionErrors
 	return errors.Wrap(err, message)
 }
@@ -164,7 +164,7 @@ func ResourceNotFoundError(ref ResourceRef) *FunctionError {
 	return New(ErrorCodeResourceNotFound, "resource not found").WithResource(ref)
 }
 
-// ResourceForbiddenError creates a resource forbidden error  
+// ResourceForbiddenError creates a resource forbidden error
 func ResourceForbiddenError(ref ResourceRef) *FunctionError {
 	return New(ErrorCodeResourceForbidden, "access forbidden").WithResource(ref)
 }

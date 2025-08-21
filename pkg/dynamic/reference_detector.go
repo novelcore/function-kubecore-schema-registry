@@ -8,7 +8,6 @@ import (
 	"sync"
 
 	"github.com/crossplane/function-sdk-go/logging"
-
 )
 
 // ReferenceDetector interface for detecting reference fields in schemas
@@ -33,11 +32,11 @@ type ReferenceMetadata struct {
 
 // PatternBasedDetector implements reference detection using configurable patterns
 type PatternBasedDetector struct {
-	patterns    []ReferencePattern
-	regexCache  map[string]*regexp.Regexp
-	logger      logging.Logger
-	stats       *DetectionStats
-	mu          sync.RWMutex
+	patterns   []ReferencePattern
+	regexCache map[string]*regexp.Regexp
+	logger     logging.Logger
+	stats      *DetectionStats
+	mu         sync.RWMutex
 }
 
 // NewReferenceDetector creates a new pattern-based reference detector
@@ -48,50 +47,50 @@ func NewReferenceDetector(logger logging.Logger) *PatternBasedDetector {
 		logger:     logger,
 		stats:      &DetectionStats{},
 	}
-	
+
 	// Copy default patterns
 	copy(detector.patterns, DefaultReferencePatterns)
-	
+
 	return detector
 }
 
 // DetectReferences analyzes a schema and detects all reference fields
 func (d *PatternBasedDetector) DetectReferences(schema *ResourceSchema) ([]ReferenceField, error) {
 	d.resetStats()
-	
+
 	var references []ReferenceField
-	
+
 	// Analyze all fields recursively
 	for fieldName, fieldDef := range schema.Fields {
 		refs := d.analyzeFieldRecursively(fieldName, fieldDef, "")
 		references = append(references, refs...)
 	}
-	
+
 	d.stats.ReferencesFound = len(references)
-	
+
 	d.logger.Debug("Reference detection completed",
 		"fields_analyzed", d.stats.FieldsAnalyzed,
 		"references_found", d.stats.ReferencesFound,
 		"pattern_matches", d.stats.PatternMatches,
 		"heuristic_matches", d.stats.HeuristicMatches)
-	
+
 	return references, nil
 }
 
 // analyzeFieldRecursively analyzes a field and its nested properties for references
 func (d *PatternBasedDetector) analyzeFieldRecursively(fieldName string, fieldDef *FieldDefinition, basePath string) []ReferenceField {
 	var references []ReferenceField
-	
+
 	d.stats.FieldsAnalyzed++
-	
+
 	// Build current field path
 	fieldPath := d.buildFieldPath(basePath, fieldName)
-	
+
 	// Check if this field is a reference
 	if ref := d.analyzeFieldForReference(fieldName, fieldDef, fieldPath); ref != nil {
 		references = append(references, *ref)
 	}
-	
+
 	// Recursively analyze nested properties
 	if fieldDef.Properties != nil {
 		for propName, propDef := range fieldDef.Properties {
@@ -99,14 +98,14 @@ func (d *PatternBasedDetector) analyzeFieldRecursively(fieldName string, fieldDe
 			references = append(references, nestedRefs...)
 		}
 	}
-	
+
 	// Analyze array items
 	if fieldDef.Items != nil {
 		arrayPath := fieldPath + "[*]"
 		itemRefs := d.analyzeFieldRecursively("", fieldDef.Items, arrayPath)
 		references = append(references, itemRefs...)
 	}
-	
+
 	return references
 }
 
@@ -117,13 +116,13 @@ func (d *PatternBasedDetector) analyzeFieldForReference(fieldName string, fieldD
 		d.stats.PatternMatches++
 		return ref
 	}
-	
+
 	// Heuristic-based detection
 	if ref := d.detectByHeuristics(fieldName, fieldDef, fieldPath); ref != nil {
 		d.stats.HeuristicMatches++
 		return ref
 	}
-	
+
 	return nil
 }
 
@@ -142,7 +141,7 @@ func (d *PatternBasedDetector) detectByPattern(fieldName string, fieldDef *Field
 			}
 		}
 	}
-	
+
 	return nil
 }
 
@@ -158,7 +157,7 @@ func (d *PatternBasedDetector) detectByHeuristics(fieldName string, fieldDef *Fi
 			DetectionMethod: "description_analysis",
 		}
 	}
-	
+
 	// Check for common reference field naming patterns
 	if d.looksLikeReference(fieldName) {
 		return &ReferenceField{
@@ -169,7 +168,7 @@ func (d *PatternBasedDetector) detectByHeuristics(fieldName string, fieldDef *Fi
 			DetectionMethod: "naming_heuristic",
 		}
 	}
-	
+
 	// Check for nested reference structure (e.g., {name: string, namespace: string})
 	if d.hasReferenceStructure(fieldDef) {
 		return &ReferenceField{
@@ -180,7 +179,7 @@ func (d *PatternBasedDetector) detectByHeuristics(fieldName string, fieldDef *Fi
 			DetectionMethod: "structure_analysis",
 		}
 	}
-	
+
 	return nil
 }
 
@@ -190,17 +189,17 @@ func (d *PatternBasedDetector) matchesPattern(fieldName, pattern string) bool {
 	if matched, err := filepath.Match(pattern, fieldName); err == nil && matched {
 		return true
 	}
-	
+
 	// Try case-insensitive matching
 	if matched, err := filepath.Match(strings.ToLower(pattern), strings.ToLower(fieldName)); err == nil && matched {
 		return true
 	}
-	
+
 	// Try regex pattern if it looks like regex
 	if strings.Contains(pattern, "\\") || strings.Contains(pattern, "^") || strings.Contains(pattern, "$") {
 		return d.matchesRegex(fieldName, pattern)
 	}
-	
+
 	return false
 }
 
@@ -208,7 +207,7 @@ func (d *PatternBasedDetector) matchesPattern(fieldName, pattern string) bool {
 func (d *PatternBasedDetector) matchesRegex(fieldName, pattern string) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	
+
 	regex, exists := d.regexCache[pattern]
 	if !exists {
 		var err error
@@ -219,7 +218,7 @@ func (d *PatternBasedDetector) matchesRegex(fieldName, pattern string) bool {
 		}
 		d.regexCache[pattern] = regex
 	}
-	
+
 	return regex.MatchString(fieldName)
 }
 
@@ -243,10 +242,10 @@ func (d *PatternBasedDetector) inferTargetKind(fieldName string, pattern Referen
 	if pattern.TargetKind != "" {
 		return pattern.TargetKind
 	}
-	
+
 	// Try to infer from field name
 	fieldLower := strings.ToLower(fieldName)
-	
+
 	// Common Kubernetes resources
 	kindMappings := map[string]string{
 		"configmap":    "ConfigMap",
@@ -259,7 +258,7 @@ func (d *PatternBasedDetector) inferTargetKind(fieldName string, pattern Referen
 		"storageclass": "StorageClass",
 		"namespace":    "Namespace",
 		"node":         "Node",
-		
+
 		// KubeCore specific
 		"kubecluster": "KubeCluster",
 		"kubenv":      "KubEnv",
@@ -267,20 +266,20 @@ func (d *PatternBasedDetector) inferTargetKind(fieldName string, pattern Referen
 		"kubesystem":  "KubeSystem",
 		"kubenet":     "KubeNet",
 		"qualitygate": "QualityGate",
-		
+
 		// GitHub platform specific
 		"githubproject":  "GitHubProject",
 		"githubinfra":    "GitHubInfra",
 		"githubsystem":   "GitHubSystem",
 		"githubprovider": "GithubProvider",
 	}
-	
+
 	for keyword, kind := range kindMappings {
 		if strings.Contains(fieldLower, keyword) {
 			return kind
 		}
 	}
-	
+
 	// Extract potential kind from field name
 	// e.g., "myResourceRef" -> "MyResource"
 	if strings.HasSuffix(fieldLower, "ref") {
@@ -290,7 +289,7 @@ func (d *PatternBasedDetector) inferTargetKind(fieldName string, pattern Referen
 			return strings.Title(base)
 		}
 	}
-	
+
 	return ""
 }
 
@@ -299,7 +298,7 @@ func (d *PatternBasedDetector) containsReferenceKeywords(description string) boo
 	if description == "" {
 		return false
 	}
-	
+
 	descLower := strings.ToLower(description)
 	keywords := []string{
 		"reference to",
@@ -310,20 +309,20 @@ func (d *PatternBasedDetector) containsReferenceKeywords(description string) boo
 		"identifier of",
 		"id of",
 	}
-	
+
 	for _, keyword := range keywords {
 		if strings.Contains(descLower, keyword) {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
 // looksLikeReference checks if field name follows common reference naming patterns
 func (d *PatternBasedDetector) looksLikeReference(fieldName string) bool {
 	fieldLower := strings.ToLower(fieldName)
-	
+
 	// Common reference suffixes
 	suffixes := []string{"ref", "reference", "id", "name"}
 	for _, suffix := range suffixes {
@@ -331,7 +330,7 @@ func (d *PatternBasedDetector) looksLikeReference(fieldName string) bool {
 			return true
 		}
 	}
-	
+
 	// Common reference prefixes
 	prefixes := []string{"target", "source", "parent", "owner"}
 	for _, prefix := range prefixes {
@@ -339,7 +338,7 @@ func (d *PatternBasedDetector) looksLikeReference(fieldName string) bool {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -348,11 +347,11 @@ func (d *PatternBasedDetector) hasReferenceStructure(fieldDef *FieldDefinition) 
 	if fieldDef.Type != "object" || fieldDef.Properties == nil {
 		return false
 	}
-	
+
 	// Look for common reference field combinations
 	hasName := false
 	hasKind := false
-	
+
 	for propName := range fieldDef.Properties {
 		propLower := strings.ToLower(propName)
 		switch propLower {
@@ -362,7 +361,7 @@ func (d *PatternBasedDetector) hasReferenceStructure(fieldDef *FieldDefinition) 
 			hasKind = true
 		}
 	}
-	
+
 	// Reference structures typically have at least a name
 	// Optionally kind for typed references
 	return hasName || (hasKind && hasName)
@@ -393,7 +392,7 @@ func (d *PatternBasedDetector) ExtractReferenceMetadata(fieldName string, fieldD
 			}
 		}
 	}
-	
+
 	// Fall back to heuristics
 	if d.containsReferenceKeywords(fieldDef.Description) {
 		return &ReferenceMetadata{
@@ -402,7 +401,7 @@ func (d *PatternBasedDetector) ExtractReferenceMetadata(fieldName string, fieldD
 			DetectionMethod: "description_analysis",
 		}
 	}
-	
+
 	return nil
 }
 
@@ -410,7 +409,7 @@ func (d *PatternBasedDetector) ExtractReferenceMetadata(fieldName string, fieldD
 func (d *PatternBasedDetector) AddPattern(pattern ReferencePattern) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	
+
 	d.patterns = append(d.patterns, pattern)
 }
 
@@ -418,7 +417,7 @@ func (d *PatternBasedDetector) AddPattern(pattern ReferencePattern) {
 func (d *PatternBasedDetector) GetPatterns() []ReferencePattern {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
-	
+
 	patterns := make([]ReferencePattern, len(d.patterns))
 	copy(patterns, d.patterns)
 	return patterns
@@ -449,7 +448,7 @@ func (d *PatternBasedDetector) GetDetectionStats() *DetectionStats {
 func (d *PatternBasedDetector) ClearRegexCache() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	
+
 	d.regexCache = make(map[string]*regexp.Regexp)
 }
 
@@ -457,11 +456,11 @@ func (d *PatternBasedDetector) ClearRegexCache() {
 func (d *PatternBasedDetector) LoadCustomPatterns(patterns []ReferencePattern) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	
+
 	// Replace patterns with custom ones
 	d.patterns = make([]ReferencePattern, len(patterns))
 	copy(d.patterns, patterns)
-	
+
 	// Clear regex cache since patterns changed
 	d.regexCache = make(map[string]*regexp.Regexp)
 }

@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"strings"
 	"time"
-	
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/dynamic"
-	
+
 	"github.com/crossplane/function-sdk-go/logging"
-	
+
 	dynamictypes "github.com/crossplane/function-kubecore-schema-registry/pkg/dynamic"
 	functionerrors "github.com/crossplane/function-kubecore-schema-registry/pkg/errors"
 	"github.com/crossplane/function-kubecore-schema-registry/pkg/registry"
@@ -22,13 +22,13 @@ import (
 type ReferenceResolver interface {
 	// ExtractReferences extracts reference fields from a resource
 	ExtractReferences(ctx context.Context, resource *unstructured.Unstructured) ([]dynamictypes.ReferenceField, error)
-	
+
 	// ResolveReferences resolves reference fields to actual resources
 	ResolveReferences(ctx context.Context, source *unstructured.Unstructured, references []dynamictypes.ReferenceField) ([]*unstructured.Unstructured, []error)
-	
+
 	// ResolveReference resolves a single reference field
 	ResolveReference(ctx context.Context, source *unstructured.Unstructured, reference dynamictypes.ReferenceField) (*unstructured.Unstructured, error)
-	
+
 	// ValidateReference validates if a reference can be resolved
 	ValidateReference(reference dynamictypes.ReferenceField) error
 }
@@ -37,16 +37,16 @@ type ReferenceResolver interface {
 type DefaultReferenceResolver struct {
 	// dynamicClient provides access to Kubernetes dynamic API
 	dynamicClient dynamic.Interface
-	
+
 	// registry provides resource type information
 	registry registry.Registry
-	
+
 	// referenceDetector detects reference fields in resources
 	referenceDetector dynamictypes.ReferenceDetector
-	
+
 	// logger provides structured logging
 	logger logging.Logger
-	
+
 	// cache stores resolved references
 	cache Cache
 }
@@ -55,16 +55,16 @@ type DefaultReferenceResolver struct {
 type ReferenceResolutionResult struct {
 	// Reference is the reference field that was resolved
 	Reference dynamictypes.ReferenceField
-	
+
 	// ResolvedResource is the resolved resource (nil if not found)
 	ResolvedResource *unstructured.Unstructured
-	
+
 	// Error contains any error that occurred during resolution
 	Error error
-	
+
 	// Cached indicates if the result was retrieved from cache
 	Cached bool
-	
+
 	// ResolutionTime is the time taken to resolve this reference
 	ResolutionTime time.Duration
 }
@@ -89,10 +89,10 @@ func (rr *DefaultReferenceResolver) ExtractReferences(ctx context.Context, resou
 			"apiVersion", resource.GetAPIVersion(),
 			"kind", resource.GetKind())
 	}
-	
+
 	// Extract references using multiple methods
 	var allReferences []dynamictypes.ReferenceField
-	
+
 	// Method 1: Registry-based detection (if available)
 	if resourceType != nil {
 		registryRefs, err := rr.extractReferencesFromRegistry(resource, resourceType)
@@ -100,22 +100,22 @@ func (rr *DefaultReferenceResolver) ExtractReferences(ctx context.Context, resou
 			allReferences = append(allReferences, registryRefs...)
 		}
 	}
-	
+
 	// Method 2: Pattern-based detection
 	patternRefs, err := rr.extractReferencesFromPatterns(resource)
 	if err == nil {
 		allReferences = append(allReferences, patternRefs...)
 	}
-	
+
 	// Method 3: Owner reference extraction
 	ownerRefs, err := rr.extractOwnerReferences(resource)
 	if err == nil {
 		allReferences = append(allReferences, ownerRefs...)
 	}
-	
+
 	// Deduplicate references
 	deduplicatedRefs := rr.deduplicateReferences(allReferences)
-	
+
 	rr.logger.Debug("Extracted references from resource",
 		"resource", fmt.Sprintf("%s/%s", resource.GetNamespace(), resource.GetName()),
 		"kind", resource.GetKind(),
@@ -123,7 +123,7 @@ func (rr *DefaultReferenceResolver) ExtractReferences(ctx context.Context, resou
 		"registryRefs", len(allReferences)-len(patternRefs)-len(ownerRefs),
 		"patternRefs", len(patternRefs),
 		"ownerRefs", len(ownerRefs))
-	
+
 	return deduplicatedRefs, nil
 }
 
@@ -131,17 +131,17 @@ func (rr *DefaultReferenceResolver) ExtractReferences(ctx context.Context, resou
 func (rr *DefaultReferenceResolver) ResolveReferences(ctx context.Context, source *unstructured.Unstructured, references []dynamictypes.ReferenceField) ([]*unstructured.Unstructured, []error) {
 	var resolvedResources []*unstructured.Unstructured
 	var errors []error
-	
+
 	// Process references concurrently for better performance
 	results := make(chan *ReferenceResolutionResult, len(references))
-	
+
 	// Start goroutines for each reference
 	for _, ref := range references {
 		go func(ref dynamictypes.ReferenceField) {
 			startTime := time.Now()
-			
+
 			resolved, err := rr.ResolveReference(ctx, source, ref)
-			
+
 			results <- &ReferenceResolutionResult{
 				Reference:        ref,
 				ResolvedResource: resolved,
@@ -150,18 +150,18 @@ func (rr *DefaultReferenceResolver) ResolveReferences(ctx context.Context, sourc
 			}
 		}(ref)
 	}
-	
+
 	// Collect results
 	for i := 0; i < len(references); i++ {
 		result := <-results
-		
+
 		if result.Error != nil {
 			errors = append(errors, result.Error)
 		} else if result.ResolvedResource != nil {
 			resolvedResources = append(resolvedResources, result.ResolvedResource)
 		}
 	}
-	
+
 	return resolvedResources, errors
 }
 
@@ -169,7 +169,7 @@ func (rr *DefaultReferenceResolver) ResolveReferences(ctx context.Context, sourc
 func (rr *DefaultReferenceResolver) ResolveReference(ctx context.Context, source *unstructured.Unstructured, reference dynamictypes.ReferenceField) (*unstructured.Unstructured, error) {
 	// Generate cache key
 	cacheKey := rr.generateCacheKey(source, reference)
-	
+
 	// Check cache first
 	if cached, found := rr.cache.Get(cacheKey); found {
 		if cachedResource, ok := cached.(*unstructured.Unstructured); ok {
@@ -177,33 +177,33 @@ func (rr *DefaultReferenceResolver) ResolveReference(ctx context.Context, source
 			return cachedResource, nil
 		}
 	}
-	
+
 	// Validate reference
 	if err := rr.ValidateReference(reference); err != nil {
 		return nil, functionerrors.Wrap(err, "reference validation failed")
 	}
-	
+
 	// Extract reference value from source resource
 	refValue, err := rr.extractReferenceValue(source, reference.FieldPath)
 	if err != nil {
 		return nil, functionerrors.Wrap(err, "failed to extract reference value")
 	}
-	
+
 	// Parse reference value to get target resource details
 	targetName, targetNamespace, err := rr.parseReferenceValue(refValue, reference, source.GetNamespace())
 	if err != nil {
 		return nil, functionerrors.Wrap(err, "failed to parse reference value")
 	}
-	
+
 	// Build GroupVersionResource for the target
 	gvr, err := rr.buildGVR(reference.TargetGroup, reference.TargetVersion, reference.TargetKind)
 	if err != nil {
 		return nil, functionerrors.Wrap(err, "failed to build GroupVersionResource")
 	}
-	
+
 	// Resolve the reference
 	var resolvedResource *unstructured.Unstructured
-	
+
 	if targetNamespace != "" {
 		// Namespaced resource
 		resolvedResource, err = rr.dynamicClient.Resource(gvr).Namespace(targetNamespace).Get(ctx, targetName, metav1.GetOptions{})
@@ -211,20 +211,20 @@ func (rr *DefaultReferenceResolver) ResolveReference(ctx context.Context, source
 		// Cluster-scoped resource
 		resolvedResource, err = rr.dynamicClient.Resource(gvr).Get(ctx, targetName, metav1.GetOptions{})
 	}
-	
+
 	if err != nil {
 		return nil, functionerrors.Wrap(err, fmt.Sprintf("failed to resolve reference to %s/%s", reference.TargetKind, targetName))
 	}
-	
+
 	// Cache the result
 	rr.cache.Set(cacheKey, resolvedResource, 5*time.Minute)
-	
+
 	rr.logger.Debug("Reference resolved successfully",
 		"reference", reference.FieldPath,
 		"targetKind", reference.TargetKind,
 		"targetName", targetName,
 		"targetNamespace", targetNamespace)
-	
+
 	return resolvedResource, nil
 }
 
@@ -234,23 +234,23 @@ func (rr *DefaultReferenceResolver) ValidateReference(reference dynamictypes.Ref
 	if reference.FieldPath == "" {
 		return fmt.Errorf("reference field path is empty")
 	}
-	
+
 	if reference.TargetKind == "" {
 		return fmt.Errorf("reference target kind is empty")
 	}
-	
+
 	// Validate confidence threshold
 	if reference.Confidence < 0.1 {
 		return fmt.Errorf("reference confidence too low: %f", reference.Confidence)
 	}
-	
+
 	return nil
 }
 
 // Helper methods
 
 // extractReferencesFromRegistry extracts references using registry information
-func (rr *DefaultReferenceResolver) extractReferencesFromRegistry(resource *unstructured.Unstructured, resourceType registry.ResourceType) ([]dynamictypes.ReferenceField, error) {
+func (rr *DefaultReferenceResolver) extractReferencesFromRegistry(resource *unstructured.Unstructured, resourceType *registry.ResourceType) ([]dynamictypes.ReferenceField, error) {
 	// This would use the registry's schema information to identify reference fields
 	// For now, return empty slice as the registry interface would need extension
 	return []dynamictypes.ReferenceField{}, nil
@@ -263,14 +263,14 @@ func (rr *DefaultReferenceResolver) extractReferencesFromPatterns(resource *unst
 	if resourceSchema == nil {
 		return []dynamictypes.ReferenceField{}, nil
 	}
-	
+
 	return rr.referenceDetector.DetectReferences(resourceSchema)
 }
 
 // extractOwnerReferences extracts owner references
 func (rr *DefaultReferenceResolver) extractOwnerReferences(resource *unstructured.Unstructured) ([]dynamictypes.ReferenceField, error) {
 	var references []dynamictypes.ReferenceField
-	
+
 	ownerRefs := resource.GetOwnerReferences()
 	for i, ownerRef := range ownerRefs {
 		ref := dynamictypes.ReferenceField{
@@ -282,7 +282,7 @@ func (rr *DefaultReferenceResolver) extractOwnerReferences(resource *unstructure
 			Confidence:      1.0, // Owner references are always accurate
 			DetectionMethod: "ownerReference",
 		}
-		
+
 		// Extract group and version from APIVersion
 		if strings.Contains(ownerRef.APIVersion, "/") {
 			parts := strings.Split(ownerRef.APIVersion, "/")
@@ -292,10 +292,10 @@ func (rr *DefaultReferenceResolver) extractOwnerReferences(resource *unstructure
 			ref.TargetGroup = ""
 			ref.TargetVersion = ownerRef.APIVersion
 		}
-		
+
 		references = append(references, ref)
 	}
-	
+
 	return references, nil
 }
 
@@ -307,19 +307,19 @@ func (rr *DefaultReferenceResolver) convertToResourceSchema(resource *unstructur
 	// 2. Analyze their structure
 	// 3. Build field definitions with types
 	// 4. Return a proper ResourceSchema
-	
+
 	fields := make(map[string]*dynamictypes.FieldDefinition)
-	
+
 	// Analyze spec fields
 	if spec, found, _ := unstructured.NestedMap(resource.Object, "spec"); found {
 		rr.analyzeFields(spec, "spec", fields)
 	}
-	
+
 	// Analyze status fields
 	if status, found, _ := unstructured.NestedMap(resource.Object, "status"); found {
 		rr.analyzeFields(status, "status", fields)
 	}
-	
+
 	return &dynamictypes.ResourceSchema{
 		Fields:      fields,
 		Description: fmt.Sprintf("Schema for %s", resource.GetKind()),
@@ -330,18 +330,18 @@ func (rr *DefaultReferenceResolver) convertToResourceSchema(resource *unstructur
 func (rr *DefaultReferenceResolver) analyzeFields(obj map[string]interface{}, basePath string, fields map[string]*dynamictypes.FieldDefinition) {
 	for key, value := range obj {
 		fieldPath := fmt.Sprintf("%s.%s", basePath, key)
-		
+
 		fieldDef := &dynamictypes.FieldDefinition{
 			Type: rr.determineFieldType(value),
 		}
-		
+
 		// Recursively analyze nested objects
 		if nestedMap, ok := value.(map[string]interface{}); ok {
 			properties := make(map[string]*dynamictypes.FieldDefinition)
 			rr.analyzeNestedFields(nestedMap, properties)
 			fieldDef.Properties = properties
 		}
-		
+
 		fields[fieldPath] = fieldDef
 	}
 }
@@ -379,7 +379,7 @@ func (rr *DefaultReferenceResolver) determineFieldType(value interface{}) string
 func (rr *DefaultReferenceResolver) deduplicateReferences(references []dynamictypes.ReferenceField) []dynamictypes.ReferenceField {
 	seen := make(map[string]bool)
 	var result []dynamictypes.ReferenceField
-	
+
 	for _, ref := range references {
 		key := fmt.Sprintf("%s:%s:%s", ref.FieldPath, ref.TargetKind, ref.TargetGroup)
 		if !seen[key] {
@@ -387,14 +387,14 @@ func (rr *DefaultReferenceResolver) deduplicateReferences(references []dynamicty
 			result = append(result, ref)
 		}
 	}
-	
+
 	return result
 }
 
 // extractReferenceValue extracts the value of a reference field from a resource
 func (rr *DefaultReferenceResolver) extractReferenceValue(resource *unstructured.Unstructured, fieldPath string) (interface{}, error) {
 	pathParts := strings.Split(fieldPath, ".")
-	
+
 	// Handle owner references specially
 	if len(pathParts) >= 2 && pathParts[0] == "metadata" && strings.HasPrefix(pathParts[1], "ownerReferences") {
 		ownerRefs := resource.GetOwnerReferences()
@@ -404,17 +404,17 @@ func (rr *DefaultReferenceResolver) extractReferenceValue(resource *unstructured
 		}
 		return nil, fmt.Errorf("no owner references found")
 	}
-	
+
 	// Use unstructured.NestedFieldCopy to extract the field value
 	value, found, err := unstructured.NestedFieldCopy(resource.Object, pathParts...)
 	if err != nil {
 		return nil, functionerrors.Wrap(err, "failed to extract field value")
 	}
-	
+
 	if !found {
 		return nil, fmt.Errorf("field not found: %s", fieldPath)
 	}
-	
+
 	return value, nil
 }
 
@@ -425,7 +425,7 @@ func (rr *DefaultReferenceResolver) parseReferenceValue(refValue interface{}, re
 		// Simple string reference (just the name)
 		name = v
 		namespace = sourceNamespace // Default to source namespace
-		
+
 	case map[string]interface{}:
 		// Object reference with name and optionally namespace
 		if nameVal, found := v["name"]; found {
@@ -437,7 +437,7 @@ func (rr *DefaultReferenceResolver) parseReferenceValue(refValue interface{}, re
 		} else {
 			return "", "", fmt.Errorf("reference object missing 'name' field")
 		}
-		
+
 		// Check for namespace
 		if nsVal, found := v["namespace"]; found {
 			if nsStr, ok := nsVal.(string); ok {
@@ -446,16 +446,16 @@ func (rr *DefaultReferenceResolver) parseReferenceValue(refValue interface{}, re
 		} else {
 			namespace = sourceNamespace // Default to source namespace
 		}
-		
+
 	default:
 		return "", "", fmt.Errorf("unsupported reference value type: %T", refValue)
 	}
-	
+
 	// Validate that we have a name
 	if name == "" {
 		return "", "", fmt.Errorf("empty reference name")
 	}
-	
+
 	return name, namespace, nil
 }
 
@@ -465,10 +465,10 @@ func (rr *DefaultReferenceResolver) buildGVR(group, version, kind string) (schem
 	if version == "" {
 		version = "v1"
 	}
-	
+
 	// Convert kind to resource name (pluralize and lowercase)
 	resource := rr.kindToResource(kind)
-	
+
 	return schema.GroupVersionResource{
 		Group:    group,
 		Version:  version,
@@ -480,45 +480,45 @@ func (rr *DefaultReferenceResolver) buildGVR(group, version, kind string) (schem
 func (rr *DefaultReferenceResolver) kindToResource(kind string) string {
 	// Simple pluralization rules
 	lower := strings.ToLower(kind)
-	
+
 	// Special cases
 	specialCases := map[string]string{
-		"pod":                           "pods",
-		"service":                      "services",
-		"configmap":                    "configmaps",
-		"secret":                       "secrets",
-		"persistentvolumeclaim":        "persistentvolumeclaims",
-		"persistentvolume":             "persistentvolumes",
-		"storageclass":                 "storageclasses",
-		"deployment":                   "deployments",
-		"replicaset":                   "replicasets",
-		"daemonset":                    "daemonsets",
-		"statefulset":                  "statefulsets",
-		"job":                          "jobs",
-		"cronjob":                      "cronjobs",
-		"ingress":                      "ingresses",
-		"networkpolicy":                "networkpolicies",
-		"poddisruptionbudget":          "poddisruptionbudgets",
-		"horizontalpodautoscaler":      "horizontalpodautoscalers",
-		"verticalpodautoscaler":        "verticalpodautoscalers",
-		
+		"pod":                     "pods",
+		"service":                 "services",
+		"configmap":               "configmaps",
+		"secret":                  "secrets",
+		"persistentvolumeclaim":   "persistentvolumeclaims",
+		"persistentvolume":        "persistentvolumes",
+		"storageclass":            "storageclasses",
+		"deployment":              "deployments",
+		"replicaset":              "replicasets",
+		"daemonset":               "daemonsets",
+		"statefulset":             "statefulsets",
+		"job":                     "jobs",
+		"cronjob":                 "cronjobs",
+		"ingress":                 "ingresses",
+		"networkpolicy":           "networkpolicies",
+		"poddisruptionbudget":     "poddisruptionbudgets",
+		"horizontalpodautoscaler": "horizontalpodautoscalers",
+		"verticalpodautoscaler":   "verticalpodautoscalers",
+
 		// KubeCore platform resources
-		"kubecluster":                  "kubeclusters",
-		"kubenv":                       "kubenvs",
-		"kubeapp":                      "kubeapps",
-		"kubesystem":                   "kubesystems",
-		"kubenet":                      "kubenets",
-		"qualitygate":                  "qualitygates",
-		"githubproject":                "githubprojects",
-		"githubinfra":                  "githubinfras",
-		"githubsystem":                 "githubsystems",
-		"githubprovider":               "githubproviders",
+		"kubecluster":    "kubeclusters",
+		"kubenv":         "kubenvs",
+		"kubeapp":        "kubeapps",
+		"kubesystem":     "kubesystems",
+		"kubenet":        "kubenets",
+		"qualitygate":    "qualitygates",
+		"githubproject":  "githubprojects",
+		"githubinfra":    "githubinfras",
+		"githubsystem":   "githubsystems",
+		"githubprovider": "githubproviders",
 	}
-	
+
 	if resource, found := specialCases[lower]; found {
 		return resource
 	}
-	
+
 	// Default pluralization: add 's'
 	return lower + "s"
 }

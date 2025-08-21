@@ -17,7 +17,7 @@ import (
 type Builder interface {
 	// BuildContext creates the context data structure for templates
 	BuildContext(fetchResult *discovery.FetchResult) (map[string]interface{}, error)
-	
+
 	// SetContext sets the context in the Crossplane response
 	SetContext(rsp *fnv1.RunFunctionResponse, fetchResult *discovery.FetchResult) error
 }
@@ -47,7 +47,7 @@ func (b *DefaultBuilder) BuildContext(fetchResult *discovery.FetchResult) (map[s
 			resourceData["apiVersion"] = fetchedResource.Resource.GetAPIVersion()
 			resourceData["kind"] = fetchedResource.Resource.GetKind()
 			resourceData["metadata"] = fetchedResource.Resource.Object["metadata"]
-			
+
 			// Add spec and status if they exist
 			if spec, found := fetchedResource.Resource.Object["spec"]; found {
 				resourceData["spec"] = spec
@@ -90,16 +90,16 @@ func (b *DefaultBuilder) BuildContext(fetchResult *discovery.FetchResult) (map[s
 
 	// Add fetch summary
 	context["fetchSummary"] = map[string]interface{}{
-		"totalRequested":   fetchResult.Summary.TotalRequested,
-		"successful":       fetchResult.Summary.Successful,
-		"failed":           fetchResult.Summary.Failed,
-		"skipped":          fetchResult.Summary.Skipped,
-		"notFound":         fetchResult.Summary.NotFound,
-		"forbidden":        fetchResult.Summary.Forbidden,
-		"timeout":          fetchResult.Summary.Timeout,
-		"totalDuration":    fetchResult.Summary.TotalDuration.Milliseconds(),
-		"averageDuration":  fetchResult.Summary.AverageDuration.Milliseconds(),
-		"errors":           b.buildErrorSummary(fetchResult.Summary.Errors),
+		"totalRequested":  fetchResult.Summary.TotalRequested,
+		"successful":      fetchResult.Summary.Successful,
+		"failed":          fetchResult.Summary.Failed,
+		"skipped":         fetchResult.Summary.Skipped,
+		"notFound":        fetchResult.Summary.NotFound,
+		"forbidden":       fetchResult.Summary.Forbidden,
+		"timeout":         fetchResult.Summary.Timeout,
+		"totalDuration":   fetchResult.Summary.TotalDuration.Milliseconds(),
+		"averageDuration": fetchResult.Summary.AverageDuration.Milliseconds(),
+		"errors":          b.buildErrorSummary(fetchResult.Summary.Errors),
 	}
 
 	// Add Phase 2 results if present
@@ -175,7 +175,7 @@ func (b *DefaultBuilder) buildResourceContext(fetchedResource *discovery.Fetched
 		context["apiVersion"] = fetchedResource.Resource.GetAPIVersion()
 		context["kind"] = fetchedResource.Resource.GetKind()
 		context["metadata"] = fetchedResource.Resource.Object["metadata"]
-		
+
 		if spec, found := fetchedResource.Resource.Object["spec"]; found {
 			context["spec"] = spec
 		}
@@ -203,26 +203,26 @@ func (b *DefaultBuilder) buildResourceContext(fetchedResource *discovery.Fetched
 		phase2Data := map[string]interface{}{
 			"matchedBy": fetchedResource.Metadata.Phase2Metadata.MatchedBy,
 		}
-		
+
 		if len(fetchedResource.Metadata.Phase2Metadata.SearchNamespaces) > 0 {
 			phase2Data["searchNamespaces"] = fetchedResource.Metadata.Phase2Metadata.SearchNamespaces
 		}
-		
+
 		if fetchedResource.Metadata.Phase2Metadata.SortPosition != nil {
 			phase2Data["sortPosition"] = *fetchedResource.Metadata.Phase2Metadata.SortPosition
 		}
-		
+
 		if fetchedResource.Metadata.Phase2Metadata.MatchDetails != nil {
 			matchDetails := make(map[string]interface{})
-			
+
 			if len(fetchedResource.Metadata.Phase2Metadata.MatchDetails.MatchedLabels) > 0 {
 				matchDetails["matchedLabels"] = fetchedResource.Metadata.Phase2Metadata.MatchDetails.MatchedLabels
 			}
-			
+
 			if fetchedResource.Metadata.Phase2Metadata.MatchDetails.MatchScore != nil {
 				matchDetails["matchScore"] = *fetchedResource.Metadata.Phase2Metadata.MatchDetails.MatchScore
 			}
-			
+
 			if len(fetchedResource.Metadata.Phase2Metadata.MatchDetails.MatchedExpressions) > 0 {
 				var expressions []map[string]interface{}
 				for _, expr := range fetchedResource.Metadata.Phase2Metadata.MatchDetails.MatchedExpressions {
@@ -236,12 +236,12 @@ func (b *DefaultBuilder) buildResourceContext(fetchedResource *discovery.Fetched
 				}
 				matchDetails["matchedExpressions"] = expressions
 			}
-			
+
 			if len(matchDetails) > 0 {
 				phase2Data["matchDetails"] = matchDetails
 			}
 		}
-		
+
 		kubecoreMetadata["phase2"] = phase2Data
 	}
 
@@ -253,7 +253,7 @@ func (b *DefaultBuilder) buildResourceContext(fetchedResource *discovery.Fetched
 // buildErrorSummary creates a summary of errors for the context
 func (b *DefaultBuilder) buildErrorSummary(fetchErrors []*discovery.FetchError) []map[string]interface{} {
 	var errors []map[string]interface{}
-	
+
 	for _, fetchError := range fetchErrors {
 		errorSummary := map[string]interface{}{
 			"into":      fetchError.ResourceRequest.Into,
@@ -263,14 +263,14 @@ func (b *DefaultBuilder) buildErrorSummary(fetchErrors []*discovery.FetchError) 
 			"message":   fetchError.Error.Message,
 			"timestamp": fetchError.Timestamp.Format(time.RFC3339),
 		}
-		
+
 		if fetchError.ResourceRequest.Namespace != nil {
 			errorSummary["namespace"] = *fetchError.ResourceRequest.Namespace
 		}
-		
+
 		errors = append(errors, errorSummary)
 	}
-	
+
 	return errors
 }
 
@@ -334,12 +334,12 @@ func (b *DefaultBuilder) buildPhase2Results(phase2Results *discovery.Phase2Resul
 	// Add performance metrics if present
 	if phase2Results.Performance != nil {
 		results["performance"] = map[string]interface{}{
-			"queryPlanningTime":      phase2Results.Performance.QueryPlanningTime.Milliseconds(),
-			"kubernetesAPITime":      phase2Results.Performance.KubernetesAPITime.Milliseconds(),
-			"filteringTime":          phase2Results.Performance.FilteringTime.Milliseconds(),
-			"sortingTime":            phase2Results.Performance.SortingTime.Milliseconds(),
-			"totalResourcesScanned":  phase2Results.Performance.TotalResourcesScanned,
-			"cacheHitRate":           phase2Results.Performance.CacheHitRate,
+			"queryPlanningTime":     phase2Results.Performance.QueryPlanningTime.Milliseconds(),
+			"kubernetesAPITime":     phase2Results.Performance.KubernetesAPITime.Milliseconds(),
+			"filteringTime":         phase2Results.Performance.FilteringTime.Milliseconds(),
+			"sortingTime":           phase2Results.Performance.SortingTime.Milliseconds(),
+			"totalResourcesScanned": phase2Results.Performance.TotalResourcesScanned,
+			"cacheHitRate":          phase2Results.Performance.CacheHitRate,
 		}
 	}
 

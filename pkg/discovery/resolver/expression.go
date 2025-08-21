@@ -138,9 +138,9 @@ func (r *ExpressionResolver) validateExpression(expr v1beta1.Expression) error {
 	}
 
 	switch expr.Operator {
-	case v1beta1.ExpressionOpEquals, v1beta1.ExpressionOpNotEquals, 
-		 v1beta1.ExpressionOpContains, v1beta1.ExpressionOpStartsWith, 
-		 v1beta1.ExpressionOpEndsWith, v1beta1.ExpressionOpRegex:
+	case v1beta1.ExpressionOpEquals, v1beta1.ExpressionOpNotEquals,
+		v1beta1.ExpressionOpContains, v1beta1.ExpressionOpStartsWith,
+		v1beta1.ExpressionOpEndsWith, v1beta1.ExpressionOpRegex:
 		if expr.Value == nil {
 			return fmt.Errorf("operator %s requires a value", expr.Operator)
 		}
@@ -208,11 +208,11 @@ func (r *ExpressionResolver) fetchFromNamespace(ctx context.Context, gvr schema.
 	}
 
 	var matchedResources []*FetchedResource
-	
+
 	// Evaluate each resource against expressions
 	for _, item := range list.Items {
 		matched, matchDetails := r.evaluateExpressions(&item, expressions)
-		
+
 		if matched {
 			fetchedResource := &FetchedResource{
 				Request:   request,
@@ -253,7 +253,7 @@ func (r *ExpressionResolver) evaluateExpressions(resource *unstructured.Unstruct
 	for _, compiledExpr := range expressions {
 		expr := compiledExpr.Original
 		actualValue := r.getFieldValue(resource, expr.Field)
-		
+
 		matched := r.evaluateExpression(expr, actualValue, compiledExpr.Regex)
 
 		expressionMatch := ExpressionMatch{

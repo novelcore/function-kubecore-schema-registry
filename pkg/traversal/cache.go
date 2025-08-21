@@ -10,22 +10,22 @@ import (
 type Cache interface {
 	// Get retrieves a value from the cache
 	Get(key string) (interface{}, bool)
-	
+
 	// Set stores a value in the cache with TTL
 	Set(key string, value interface{}, ttl time.Duration)
-	
+
 	// Delete removes a value from the cache
 	Delete(key string)
-	
+
 	// Clear removes all values from the cache
 	Clear()
-	
+
 	// Size returns the current cache size
 	Size() int
-	
+
 	// Stats returns cache statistics
 	Stats() *CacheStats
-	
+
 	// Cleanup removes expired entries
 	Cleanup()
 }
@@ -34,22 +34,22 @@ type Cache interface {
 type CacheStats struct {
 	// Size is the current number of entries
 	Size int
-	
+
 	// Capacity is the maximum number of entries
 	Capacity int
-	
+
 	// Hits is the number of cache hits
 	Hits int64
-	
+
 	// Misses is the number of cache misses
 	Misses int64
-	
+
 	// Evictions is the number of evicted entries
 	Evictions int64
-	
+
 	// ExpiredEntries is the number of expired entries cleaned up
 	ExpiredEntries int64
-	
+
 	// HitRate is the cache hit rate
 	HitRate float64
 }
@@ -58,19 +58,19 @@ type CacheStats struct {
 type CacheEntry struct {
 	// Key is the cache key
 	Key string
-	
+
 	// Value is the cached value
 	Value interface{}
-	
+
 	// ExpiresAt is when the entry expires
 	ExpiresAt time.Time
-	
+
 	// AccessedAt is when the entry was last accessed
 	AccessedAt time.Time
-	
+
 	// CreatedAt is when the entry was created
 	CreatedAt time.Time
-	
+
 	// AccessCount is how many times the entry has been accessed
 	AccessCount int64
 }
@@ -79,25 +79,25 @@ type CacheEntry struct {
 type LRUCache struct {
 	// capacity is the maximum number of entries
 	capacity int
-	
+
 	// defaultTTL is the default time-to-live for entries
 	defaultTTL time.Duration
-	
+
 	// entries maps keys to list elements
 	entries map[string]*list.Element
-	
+
 	// lruList maintains the LRU order
 	lruList *list.List
-	
+
 	// stats tracks cache statistics
 	stats *CacheStats
-	
+
 	// mu protects access to the cache
 	mu sync.RWMutex
-	
+
 	// cleanupTicker triggers periodic cleanup
 	cleanupTicker *time.Ticker
-	
+
 	// stopCleanup stops the cleanup goroutine
 	stopCleanup chan struct{}
 }
@@ -114,11 +114,11 @@ func NewLRUCache(capacity int, defaultTTL time.Duration) *LRUCache {
 		},
 		stopCleanup: make(chan struct{}),
 	}
-	
+
 	// Start cleanup goroutine
 	cache.cleanupTicker = time.NewTicker(defaultTTL / 4) // Cleanup every quarter of TTL
 	go cache.cleanupLoop()
-	
+
 	return cache
 }
 
@@ -126,16 +126,16 @@ func NewLRUCache(capacity int, defaultTTL time.Duration) *LRUCache {
 func (c *LRUCache) Get(key string) (interface{}, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	element, exists := c.entries[key]
 	if !exists {
 		c.stats.Misses++
 		c.updateHitRate()
 		return nil, false
 	}
-	
+
 	entry := element.Value.(*CacheEntry)
-	
+
 	// Check if entry has expired
 	if time.Now().After(entry.ExpiresAt) {
 		c.removeElement(element)
@@ -144,17 +144,17 @@ func (c *LRUCache) Get(key string) (interface{}, bool) {
 		c.updateHitRate()
 		return nil, false
 	}
-	
+
 	// Update access information
 	entry.AccessedAt = time.Now()
 	entry.AccessCount++
-	
+
 	// Move to front (most recently used)
 	c.lruList.MoveToFront(element)
-	
+
 	c.stats.Hits++
 	c.updateHitRate()
-	
+
 	return entry.Value, true
 }
 
@@ -162,12 +162,12 @@ func (c *LRUCache) Get(key string) (interface{}, bool) {
 func (c *LRUCache) Set(key string, value interface{}, ttl time.Duration) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	now := time.Now()
 	if ttl <= 0 {
 		ttl = c.defaultTTL
 	}
-	
+
 	// Check if entry already exists
 	if element, exists := c.entries[key]; exists {
 		// Update existing entry
@@ -176,12 +176,12 @@ func (c *LRUCache) Set(key string, value interface{}, ttl time.Duration) {
 		entry.ExpiresAt = now.Add(ttl)
 		entry.AccessedAt = now
 		entry.AccessCount++
-		
+
 		// Move to front
 		c.lruList.MoveToFront(element)
 		return
 	}
-	
+
 	// Create new entry
 	entry := &CacheEntry{
 		Key:         key,
@@ -191,13 +191,13 @@ func (c *LRUCache) Set(key string, value interface{}, ttl time.Duration) {
 		CreatedAt:   now,
 		AccessCount: 1,
 	}
-	
+
 	// Add to front of list
 	element := c.lruList.PushFront(entry)
 	c.entries[key] = element
-	
+
 	c.stats.Size++
-	
+
 	// Evict least recently used entries if over capacity
 	for c.lruList.Len() > c.capacity {
 		c.evictLRU()
@@ -208,7 +208,7 @@ func (c *LRUCache) Set(key string, value interface{}, ttl time.Duration) {
 func (c *LRUCache) Delete(key string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	if element, exists := c.entries[key]; exists {
 		c.removeElement(element)
 	}
@@ -218,7 +218,7 @@ func (c *LRUCache) Delete(key string) {
 func (c *LRUCache) Clear() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	c.entries = make(map[string]*list.Element)
 	c.lruList.Init()
 	c.stats.Size = 0
@@ -228,7 +228,7 @@ func (c *LRUCache) Clear() {
 func (c *LRUCache) Size() int {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	
+
 	return c.stats.Size
 }
 
@@ -236,7 +236,7 @@ func (c *LRUCache) Size() int {
 func (c *LRUCache) Stats() *CacheStats {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	
+
 	// Return a copy to prevent concurrent access
 	return &CacheStats{
 		Size:           c.stats.Size,
@@ -253,10 +253,10 @@ func (c *LRUCache) Stats() *CacheStats {
 func (c *LRUCache) Cleanup() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	now := time.Now()
 	var expiredKeys []string
-	
+
 	// Find expired entries
 	for key, element := range c.entries {
 		entry := element.Value.(*CacheEntry)
@@ -264,7 +264,7 @@ func (c *LRUCache) Cleanup() {
 			expiredKeys = append(expiredKeys, key)
 		}
 	}
-	
+
 	// Remove expired entries
 	for _, key := range expiredKeys {
 		if element, exists := c.entries[key]; exists {
@@ -327,16 +327,16 @@ func (c *LRUCache) updateHitRate() {
 type TTLCache struct {
 	// entries maps keys to cache entries
 	entries map[string]*CacheEntry
-	
+
 	// stats tracks cache statistics
 	stats *CacheStats
-	
+
 	// mu protects access to the cache
 	mu sync.RWMutex
-	
+
 	// cleanupTicker triggers periodic cleanup
 	cleanupTicker *time.Ticker
-	
+
 	// stopCleanup stops the cleanup goroutine
 	stopCleanup chan struct{}
 }
@@ -348,11 +348,11 @@ func NewTTLCache(cleanupInterval time.Duration) *TTLCache {
 		stats:       &CacheStats{},
 		stopCleanup: make(chan struct{}),
 	}
-	
+
 	// Start cleanup goroutine
 	cache.cleanupTicker = time.NewTicker(cleanupInterval)
 	go cache.cleanupLoop()
-	
+
 	return cache
 }
 
@@ -360,13 +360,13 @@ func NewTTLCache(cleanupInterval time.Duration) *TTLCache {
 func (c *TTLCache) Get(key string) (interface{}, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	
+
 	entry, exists := c.entries[key]
 	if !exists {
 		c.stats.Misses++
 		return nil, false
 	}
-	
+
 	// Check if entry has expired
 	if time.Now().After(entry.ExpiresAt) {
 		c.mu.RUnlock()
@@ -379,13 +379,13 @@ func (c *TTLCache) Get(key string) (interface{}, bool) {
 		c.mu.RLock()
 		return nil, false
 	}
-	
+
 	// Update access information
 	entry.AccessedAt = time.Now()
 	entry.AccessCount++
-	
+
 	c.stats.Hits++
-	
+
 	return entry.Value, true
 }
 
@@ -393,9 +393,9 @@ func (c *TTLCache) Get(key string) (interface{}, bool) {
 func (c *TTLCache) Set(key string, value interface{}, ttl time.Duration) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	now := time.Now()
-	
+
 	entry := &CacheEntry{
 		Key:         key,
 		Value:       value,
@@ -404,12 +404,12 @@ func (c *TTLCache) Set(key string, value interface{}, ttl time.Duration) {
 		CreatedAt:   now,
 		AccessCount: 1,
 	}
-	
+
 	// Check if entry already exists
 	if _, exists := c.entries[key]; !exists {
 		c.stats.Size++
 	}
-	
+
 	c.entries[key] = entry
 }
 
@@ -417,7 +417,7 @@ func (c *TTLCache) Set(key string, value interface{}, ttl time.Duration) {
 func (c *TTLCache) Delete(key string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	if _, exists := c.entries[key]; exists {
 		delete(c.entries, key)
 		c.stats.Size--
@@ -428,7 +428,7 @@ func (c *TTLCache) Delete(key string) {
 func (c *TTLCache) Clear() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	c.entries = make(map[string]*CacheEntry)
 	c.stats.Size = 0
 }
@@ -437,7 +437,7 @@ func (c *TTLCache) Clear() {
 func (c *TTLCache) Size() int {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	
+
 	return c.stats.Size
 }
 
@@ -445,13 +445,13 @@ func (c *TTLCache) Size() int {
 func (c *TTLCache) Stats() *CacheStats {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	
+
 	// Calculate hit rate
 	total := c.stats.Hits + c.stats.Misses
 	if total > 0 {
 		c.stats.HitRate = float64(c.stats.Hits) / float64(total)
 	}
-	
+
 	// Return a copy
 	return &CacheStats{
 		Size:           c.stats.Size,
@@ -468,17 +468,17 @@ func (c *TTLCache) Stats() *CacheStats {
 func (c *TTLCache) Cleanup() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	now := time.Now()
 	var expiredKeys []string
-	
+
 	// Find expired entries
 	for key, entry := range c.entries {
 		if now.After(entry.ExpiresAt) {
 			expiredKeys = append(expiredKeys, key)
 		}
 	}
-	
+
 	// Remove expired entries
 	for _, key := range expiredKeys {
 		delete(c.entries, key)

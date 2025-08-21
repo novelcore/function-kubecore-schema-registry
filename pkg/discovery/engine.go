@@ -56,7 +56,7 @@ func NewEnhancedEngine(config *rest.Config, registry registry.Registry, context 
 
 	// Register resolvers
 	engine.resolvers[v1beta1.MatchTypeDirect] = resolver.NewDirectResolver(dynamicClient, typedClient, registry)
-	
+
 	// Only register Phase 2 resolvers if enabled
 	if context.Phase2Enabled {
 		resolverContext := resolver.DiscoveryContext{
@@ -135,7 +135,7 @@ func (e *EnhancedEngine) FetchResources(requests []v1beta1.ResourceRequest) (*Fe
 			for _, rr := range resolverResources {
 				resources = append(resources, e.convertResolverResource(rr))
 			}
-			
+
 			mu.Lock()
 			defer mu.Unlock()
 
@@ -149,7 +149,7 @@ func (e *EnhancedEngine) FetchResources(requests []v1beta1.ResourceRequest) (*Fe
 						Error:       err.(*functionerrors.FunctionError),
 					},
 				}
-				
+
 				if req.Optional {
 					result.Summary.Skipped++
 					result.Resources[req.Into] = errorResource
@@ -158,8 +158,8 @@ func (e *EnhancedEngine) FetchResources(requests []v1beta1.ResourceRequest) (*Fe
 					result.Resources[req.Into] = errorResource
 					result.Summary.Errors = append(result.Summary.Errors, &FetchError{
 						ResourceRequest: req,
-						Error:          err.(*functionerrors.FunctionError),
-						Timestamp:      time.Now(),
+						Error:           err.(*functionerrors.FunctionError),
+						Timestamp:       time.Now(),
 					})
 				}
 				return nil // Don't propagate individual fetch errors
@@ -304,7 +304,7 @@ func (o *QueryOptimizer) OptimizeQueries(requests []v1beta1.ResourceRequest) ([]
 	// - Batching similar requests
 	// - Reordering for cache efficiency
 	// - Combining label selectors
-	
+
 	plan := &QueryPlan{
 		TotalQueries:     len(requests),
 		BatchedQueries:   0, // No batching implemented yet

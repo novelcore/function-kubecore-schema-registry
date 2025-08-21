@@ -20,10 +20,10 @@ type SchemaParser interface {
 
 // DefaultSchemaParser implements schema parsing with caching
 type DefaultSchemaParser struct {
-	logger     logging.Logger
-	fieldCache map[string]*FieldDefinition
+	logger      logging.Logger
+	fieldCache  map[string]*FieldDefinition
 	schemaCache map[string]*ResourceSchema
-	mu         sync.RWMutex
+	mu          sync.RWMutex
 }
 
 // NewSchemaParser creates a new schema parser
@@ -40,24 +40,24 @@ func (p *DefaultSchemaParser) ParseOpenAPISchema(schema *apiextv1.JSONSchemaProp
 	if schema == nil {
 		return nil, fmt.Errorf("schema is nil")
 	}
-	
+
 	// Generate cache key based on schema content
 	cacheKey := p.generateSchemaCacheKey(schema)
-	
+
 	// Check cache first
 	if cached := p.getCachedSchema(cacheKey); cached != nil {
 		return cached, nil
 	}
-	
+
 	// Parse the schema
 	resourceSchema, err := p.parseSchemaRecursive(schema, "")
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to parse schema")
 	}
-	
+
 	// Cache the result
 	p.cacheSchema(cacheKey, resourceSchema)
-	
+
 	return resourceSchema, nil
 }
 
@@ -69,21 +69,21 @@ func (p *DefaultSchemaParser) parseSchemaRecursive(schema *apiextv1.JSONSchemaPr
 		Required:    schema.Required,
 		Properties:  make(map[string]*ResourceSchema),
 	}
-	
+
 	// Parse properties
 	if schema.Properties != nil {
 		for propName, propSchema := range schema.Properties {
 			fieldPath := p.buildFieldPath(path, propName)
-			
+
 			field, err := p.parseFieldDefinitionWithValidation(propName, &propSchema, fieldPath)
 			if err != nil {
 				p.logger.Debug("Failed to parse field", "field", propName, "path", fieldPath, "error", err)
 				// Continue parsing other fields instead of failing completely
 				continue
 			}
-			
+
 			resourceSchema.Fields[propName] = field
-			
+
 			// If this field has nested properties, create a nested ResourceSchema
 			if field.Properties != nil && len(field.Properties) > 0 {
 				nestedSchema, err := p.parseSchemaRecursive(&propSchema, fieldPath)
@@ -95,7 +95,7 @@ func (p *DefaultSchemaParser) parseSchemaRecursive(schema *apiextv1.JSONSchemaPr
 			}
 		}
 	}
-	
+
 	return resourceSchema, nil
 }
 
@@ -105,13 +105,13 @@ func (p *DefaultSchemaParser) parseFieldDefinitionWithValidation(name string, sc
 	if err := p.ValidateSchema(schema); err != nil {
 		return nil, errors.Wrapf(err, "invalid schema for field %s", name)
 	}
-	
+
 	// Check cache
 	cacheKey := p.generateFieldCacheKey(path, schema)
 	if cached := p.getCachedField(cacheKey); cached != nil {
 		return cached, nil
 	}
-	
+
 	field := &FieldDefinition{
 		Type:        p.inferFieldType(schema),
 		Format:      schema.Format,
@@ -120,12 +120,12 @@ func (p *DefaultSchemaParser) parseFieldDefinitionWithValidation(name string, sc
 		Pattern:     schema.Pattern,
 		Default:     p.extractDefault(schema),
 	}
-	
+
 	// Handle enum values
 	if schema.Enum != nil {
 		field.Enum = p.parseEnumValues(schema.Enum)
 	}
-	
+
 	// Handle nested properties recursively
 	if schema.Properties != nil {
 		field.Properties = make(map[string]*FieldDefinition)
@@ -139,7 +139,7 @@ func (p *DefaultSchemaParser) parseFieldDefinitionWithValidation(name string, sc
 			field.Properties[propName] = nestedField
 		}
 	}
-	
+
 	// Handle array items
 	if schema.Items != nil && schema.Items.Schema != nil {
 		itemPath := p.buildFieldPath(path, "[]")
@@ -150,10 +150,10 @@ func (p *DefaultSchemaParser) parseFieldDefinitionWithValidation(name string, sc
 			field.Items = itemField
 		}
 	}
-	
+
 	// Cache the result
 	p.cacheField(cacheKey, field)
-	
+
 	return field, nil
 }
 
@@ -162,21 +162,21 @@ func (p *DefaultSchemaParser) ExtractFieldDefinitions(schema *apiextv1.JSONSchem
 	if schema == nil || schema.Properties == nil {
 		return make(map[string]*FieldDefinition)
 	}
-	
+
 	fields := make(map[string]*FieldDefinition)
-	
+
 	for propName, propSchema := range schema.Properties {
 		fieldPath := p.buildFieldPath(path, propName)
-		
+
 		field, err := p.parseFieldDefinitionWithValidation(propName, &propSchema, fieldPath)
 		if err != nil {
 			p.logger.Debug("Failed to extract field definition", "field", propName, "path", fieldPath, "error", err)
 			continue
 		}
-		
+
 		fields[propName] = field
 	}
-	
+
 	return fields
 }
 
@@ -185,30 +185,30 @@ func (p *DefaultSchemaParser) ValidateSchema(schema *apiextv1.JSONSchemaProps) e
 	if schema == nil {
 		return fmt.Errorf("schema is nil")
 	}
-	
+
 	// Basic validation checks
 	if schema.Type == "" && schema.Properties == nil && schema.Items == nil {
 		// This might be a reference or a complex schema without explicit type
 		// Don't treat as error, but log for debugging
 		p.logger.Debug("Schema has no explicit type, properties, or items")
 	}
-	
+
 	// Validate enum values if present
 	if schema.Enum != nil && len(schema.Enum) == 0 {
 		return fmt.Errorf("enum array is empty")
 	}
-	
+
 	// Validate array items if type is array
 	if schema.Type == "array" && schema.Items == nil {
 		return fmt.Errorf("array type must have items definition")
 	}
-	
+
 	// Validate object properties if type is object
 	if schema.Type == "object" && schema.Properties == nil && schema.AdditionalProperties == nil {
 		// This is acceptable - object without properties
 		p.logger.Debug("Object type without properties or additionalProperties")
 	}
-	
+
 	return nil
 }
 
@@ -218,22 +218,22 @@ func (p *DefaultSchemaParser) inferFieldType(schema *apiextv1.JSONSchemaProps) s
 	if schema.Type != "" {
 		return schema.Type
 	}
-	
+
 	// Infer from properties
 	if schema.Properties != nil {
 		return "object"
 	}
-	
+
 	// Infer from items
 	if schema.Items != nil {
 		return "array"
 	}
-	
+
 	// Infer from enum
 	if schema.Enum != nil {
 		return "string" // Most enums are string-based
 	}
-	
+
 	// Infer from format
 	if schema.Format != "" {
 		switch schema.Format {
@@ -247,7 +247,7 @@ func (p *DefaultSchemaParser) inferFieldType(schema *apiextv1.JSONSchemaProps) s
 			return "string"
 		}
 	}
-	
+
 	// Default fallback
 	return "string"
 }
@@ -257,14 +257,14 @@ func (p *DefaultSchemaParser) extractDefault(schema *apiextv1.JSONSchemaProps) i
 	if schema.Default == nil {
 		return nil
 	}
-	
+
 	// Unmarshal JSON to get the actual value
 	var defaultValue interface{}
 	if err := json.Unmarshal(schema.Default.Raw, &defaultValue); err != nil {
 		p.logger.Debug("Failed to unmarshal default value", "error", err)
 		return nil
 	}
-	
+
 	return defaultValue
 }
 
@@ -278,7 +278,7 @@ func (p *DefaultSchemaParser) parseEnumValues(enum []apiextv1.JSON) []string {
 			p.logger.Debug("Failed to unmarshal enum value", "error", err)
 			continue
 		}
-		
+
 		// Try to convert to string
 		switch v := enumValue.(type) {
 		case string:
@@ -309,15 +309,15 @@ func (p *DefaultSchemaParser) buildFieldPath(parentPath, fieldName string) strin
 
 func (p *DefaultSchemaParser) generateSchemaCacheKey(schema *apiextv1.JSONSchemaProps) string {
 	// Generate a simple hash-like key based on schema content
-	key := fmt.Sprintf("schema_%s_%d_%d", 
-		schema.Type, 
-		len(schema.Properties), 
+	key := fmt.Sprintf("schema_%s_%d_%d",
+		schema.Type,
+		len(schema.Properties),
 		len(schema.Required))
-	
+
 	if schema.Description != "" {
 		key += "_" + fmt.Sprintf("%d", len(schema.Description))
 	}
-	
+
 	return key
 }
 
@@ -328,28 +328,28 @@ func (p *DefaultSchemaParser) generateFieldCacheKey(path string, schema *apiextv
 func (p *DefaultSchemaParser) getCachedSchema(key string) *ResourceSchema {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
-	
+
 	return p.schemaCache[key]
 }
 
 func (p *DefaultSchemaParser) cacheSchema(key string, schema *ResourceSchema) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	
+
 	p.schemaCache[key] = schema
 }
 
 func (p *DefaultSchemaParser) getCachedField(key string) *FieldDefinition {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
-	
+
 	return p.fieldCache[key]
 }
 
 func (p *DefaultSchemaParser) cacheField(key string, field *FieldDefinition) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	
+
 	p.fieldCache[key] = field
 }
 
@@ -357,7 +357,7 @@ func (p *DefaultSchemaParser) cacheField(key string, field *FieldDefinition) {
 func (p *DefaultSchemaParser) ClearCache() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	
+
 	p.fieldCache = make(map[string]*FieldDefinition)
 	p.schemaCache = make(map[string]*ResourceSchema)
 }
@@ -366,7 +366,7 @@ func (p *DefaultSchemaParser) ClearCache() {
 func (p *DefaultSchemaParser) GetCacheStats() map[string]int {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
-	
+
 	return map[string]int{
 		"schemas": len(p.schemaCache),
 		"fields":  len(p.fieldCache),
@@ -378,24 +378,24 @@ func IsKnownType(typeName string) bool {
 	knownTypes := []string{
 		"string", "number", "integer", "boolean", "array", "object", "null",
 	}
-	
+
 	for _, known := range knownTypes {
 		if strings.EqualFold(typeName, known) {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
 // GetTypeHierarchy returns the type hierarchy for a field
 func GetTypeHierarchy(field *FieldDefinition) []string {
 	var hierarchy []string
-	
+
 	current := field
 	for current != nil {
 		hierarchy = append(hierarchy, current.Type)
-		
+
 		// For arrays, descend into items
 		if current.Type == "array" && current.Items != nil {
 			current = current.Items
@@ -403,6 +403,6 @@ func GetTypeHierarchy(field *FieldDefinition) []string {
 			break
 		}
 	}
-	
+
 	return hierarchy
 }

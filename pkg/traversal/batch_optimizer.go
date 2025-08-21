@@ -7,10 +7,10 @@ import (
 	"strings"
 	"sync"
 	"time"
-	
+
 	"golang.org/x/sync/errgroup"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	
+
 	"github.com/crossplane/function-sdk-go/logging"
 )
 
@@ -18,13 +18,13 @@ import (
 type BatchOptimizer interface {
 	// OptimizeBatches optimizes resource processing by batching related operations
 	OptimizeBatches(ctx context.Context, resources []*unstructured.Unstructured, config *BatchConfig) ([]ResourceBatch, error)
-	
+
 	// ProcessBatch processes a single batch of resources
 	ProcessBatch(ctx context.Context, batch ResourceBatch, processor BatchProcessor) (*BatchResult, error)
-	
+
 	// ProcessBatches processes multiple batches concurrently
 	ProcessBatches(ctx context.Context, batches []ResourceBatch, processor BatchProcessor) ([]*BatchResult, error)
-	
+
 	// GetOptimizationStatistics returns statistics about batch optimization
 	GetOptimizationStatistics() *BatchOptimizationStats
 }
@@ -33,10 +33,10 @@ type BatchOptimizer interface {
 type BatchProcessor interface {
 	// ProcessResource processes a single resource
 	ProcessResource(ctx context.Context, resource *unstructured.Unstructured) (*ResourceProcessingResult, error)
-	
+
 	// ProcessBatch processes an entire batch (allows for batch-specific optimizations)
 	ProcessBatch(ctx context.Context, resources []*unstructured.Unstructured) ([]*ResourceProcessingResult, error)
-	
+
 	// GetProcessorName returns the name of the processor
 	GetProcessorName() string
 }
@@ -45,22 +45,22 @@ type BatchProcessor interface {
 type ResourceBatch struct {
 	// ID is a unique identifier for this batch
 	ID string
-	
+
 	// Resources contains the resources in this batch
 	Resources []*unstructured.Unstructured
-	
+
 	// BatchType indicates the type of batching used
 	BatchType BatchType
-	
+
 	// Priority indicates the processing priority of this batch
 	Priority int
-	
+
 	// Depth is the traversal depth of resources in this batch
 	Depth int
-	
+
 	// Metadata contains additional batch information
 	Metadata *BatchMetadata
-	
+
 	// CreatedAt indicates when the batch was created
 	CreatedAt time.Time
 }
@@ -87,19 +87,19 @@ const (
 type BatchMetadata struct {
 	// APIGroups contains unique API groups in the batch
 	APIGroups []string
-	
+
 	// Kinds contains unique kinds in the batch
 	Kinds []string
-	
+
 	// Namespaces contains unique namespaces in the batch
 	Namespaces []string
-	
+
 	// EstimatedProcessingTime is the estimated time to process this batch
 	EstimatedProcessingTime time.Duration
-	
+
 	// Dependencies contains other batches this batch depends on
 	Dependencies []string
-	
+
 	// OptimizationHints contains hints for processing optimization
 	OptimizationHints map[string]interface{}
 }
@@ -108,22 +108,22 @@ type BatchMetadata struct {
 type BatchResult struct {
 	// BatchID is the ID of the processed batch
 	BatchID string
-	
+
 	// Results contains the processing results for each resource
 	Results []*ResourceProcessingResult
-	
+
 	// ProcessingTime is the total time taken to process the batch
 	ProcessingTime time.Duration
-	
+
 	// Success indicates if the batch was processed successfully
 	Success bool
-	
+
 	// Errors contains any errors that occurred during processing
 	Errors []error
-	
+
 	// Statistics contains processing statistics
 	Statistics *BatchProcessingStats
-	
+
 	// CompletedAt indicates when batch processing completed
 	CompletedAt time.Time
 }
@@ -132,19 +132,19 @@ type BatchResult struct {
 type ResourceProcessingResult struct {
 	// ResourceID identifies the processed resource
 	ResourceID string
-	
+
 	// ProcessedResource is the processed resource (may be modified)
 	ProcessedResource *unstructured.Unstructured
-	
+
 	// ProcessingTime is the time taken to process this resource
 	ProcessingTime time.Duration
-	
+
 	// Success indicates if the resource was processed successfully
 	Success bool
-	
+
 	// Error contains any error that occurred during processing
 	Error error
-	
+
 	// Metadata contains additional processing metadata
 	Metadata map[string]interface{}
 }
@@ -153,25 +153,25 @@ type ResourceProcessingResult struct {
 type BatchOptimizationStats struct {
 	// TotalResources is the total number of resources processed
 	TotalResources int
-	
+
 	// TotalBatches is the total number of batches created
 	TotalBatches int
-	
+
 	// AverageBatchSize is the average size of batches
 	AverageBatchSize float64
-	
+
 	// OptimizationTime is the time taken for batch optimization
 	OptimizationTime time.Duration
-	
+
 	// ProcessingTime is the total time taken for batch processing
 	ProcessingTime time.Duration
-	
+
 	// ConcurrencyUtilization is the average concurrency utilization
 	ConcurrencyUtilization float64
-	
+
 	// BatchTypes contains counts of each batch type used
 	BatchTypes map[BatchType]int
-	
+
 	// DepthDistribution shows the distribution of resources by depth
 	DepthDistribution map[int]int
 }
@@ -180,16 +180,16 @@ type BatchOptimizationStats struct {
 type BatchProcessingStats struct {
 	// ResourcesProcessed is the number of resources processed
 	ResourcesProcessed int
-	
+
 	// ResourcesSucceeded is the number of resources processed successfully
 	ResourcesSucceeded int
-	
+
 	// ResourcesFailed is the number of resources that failed processing
 	ResourcesFailed int
-	
+
 	// AverageProcessingTime is the average time per resource
 	AverageProcessingTime time.Duration
-	
+
 	// ThroughputPerSecond is the processing throughput
 	ThroughputPerSecond float64
 }
@@ -198,10 +198,10 @@ type BatchProcessingStats struct {
 type DefaultBatchOptimizer struct {
 	// logger provides structured logging
 	logger logging.Logger
-	
+
 	// stats tracks optimization statistics
 	stats *BatchOptimizationStats
-	
+
 	// mu protects access to statistics
 	mu sync.RWMutex
 }
@@ -220,14 +220,14 @@ func NewDefaultBatchOptimizer(logger logging.Logger) *DefaultBatchOptimizer {
 // OptimizeBatches optimizes resource processing by batching related operations
 func (bo *DefaultBatchOptimizer) OptimizeBatches(ctx context.Context, resources []*unstructured.Unstructured, config *BatchConfig) ([]ResourceBatch, error) {
 	startTime := time.Now()
-	
+
 	bo.logger.Debug("Starting batch optimization",
 		"totalResources", len(resources),
 		"batchSize", config.BatchSize,
 		"sameDepthBatching", config.SameDepthBatching)
-	
+
 	var batches []ResourceBatch
-	
+
 	if !config.Enabled || len(resources) <= config.BatchSize {
 		// Create single batch if batching is disabled or resources fit in one batch
 		batch := ResourceBatch{
@@ -249,42 +249,42 @@ func (bo *DefaultBatchOptimizer) OptimizeBatches(ctx context.Context, resources 
 			batches = bo.batchBySize(resources, config)
 		}
 	}
-	
+
 	// Update statistics
 	bo.mu.Lock()
 	bo.stats.TotalResources += len(resources)
 	bo.stats.TotalBatches += len(batches)
 	bo.stats.OptimizationTime += time.Since(startTime)
-	
+
 	if bo.stats.TotalBatches > 0 {
 		bo.stats.AverageBatchSize = float64(bo.stats.TotalResources) / float64(bo.stats.TotalBatches)
 	}
-	
+
 	// Update depth distribution
 	for _, resource := range resources {
 		depth := bo.getResourceDepth(resource)
 		bo.stats.DepthDistribution[depth]++
 	}
 	bo.mu.Unlock()
-	
+
 	bo.logger.Debug("Batch optimization completed",
 		"totalBatches", len(batches),
 		"averageBatchSize", float64(len(resources))/float64(len(batches)),
 		"optimizationTime", time.Since(startTime))
-	
+
 	return batches, nil
 }
 
 // ProcessBatch processes a single batch of resources
 func (bo *DefaultBatchOptimizer) ProcessBatch(ctx context.Context, batch ResourceBatch, processor BatchProcessor) (*BatchResult, error) {
 	startTime := time.Now()
-	
+
 	bo.logger.Debug("Processing batch",
 		"batchID", batch.ID,
 		"resourceCount", len(batch.Resources),
 		"batchType", batch.BatchType,
 		"processor", processor.GetProcessorName())
-	
+
 	result := &BatchResult{
 		BatchID:     batch.ID,
 		Results:     make([]*ResourceProcessingResult, 0, len(batch.Resources)),
@@ -293,13 +293,13 @@ func (bo *DefaultBatchOptimizer) ProcessBatch(ctx context.Context, batch Resourc
 		Statistics:  &BatchProcessingStats{},
 		CompletedAt: time.Now(),
 	}
-	
+
 	// Try batch processing first
 	batchResults, err := processor.ProcessBatch(ctx, batch.Resources)
 	if err == nil && len(batchResults) == len(batch.Resources) {
 		// Batch processing succeeded
 		result.Results = batchResults
-		
+
 		// Calculate statistics
 		for _, res := range batchResults {
 			result.Statistics.ResourcesProcessed++
@@ -315,13 +315,13 @@ func (bo *DefaultBatchOptimizer) ProcessBatch(ctx context.Context, batch Resourc
 	} else {
 		// Fall back to individual resource processing
 		bo.logger.Debug("Batch processing failed, falling back to individual processing", "error", err)
-		
+
 		for _, resource := range batch.Resources {
 			resourceResult, err := processor.ProcessResource(ctx, resource)
 			if err != nil {
 				result.Success = false
 				result.Errors = append(result.Errors, err)
-				
+
 				// Create error result
 				resourceResult = &ResourceProcessingResult{
 					ResourceID:        bo.generateResourceID(resource),
@@ -330,10 +330,10 @@ func (bo *DefaultBatchOptimizer) ProcessBatch(ctx context.Context, batch Resourc
 					Error:             err,
 				}
 			}
-			
+
 			result.Results = append(result.Results, resourceResult)
 			result.Statistics.ResourcesProcessed++
-			
+
 			if resourceResult.Success {
 				result.Statistics.ResourcesSucceeded++
 			} else {
@@ -341,23 +341,23 @@ func (bo *DefaultBatchOptimizer) ProcessBatch(ctx context.Context, batch Resourc
 			}
 		}
 	}
-	
+
 	// Calculate final statistics
 	result.ProcessingTime = time.Since(startTime)
-	
+
 	if result.Statistics.ResourcesProcessed > 0 {
 		avgTime := result.ProcessingTime / time.Duration(result.Statistics.ResourcesProcessed)
 		result.Statistics.AverageProcessingTime = avgTime
-		
+
 		if result.ProcessingTime > 0 {
 			result.Statistics.ThroughputPerSecond = float64(result.Statistics.ResourcesProcessed) / result.ProcessingTime.Seconds()
 		}
 	}
-	
+
 	if len(result.Errors) > 0 {
 		result.Success = false
 	}
-	
+
 	bo.logger.Debug("Batch processing completed",
 		"batchID", batch.ID,
 		"resourcesProcessed", result.Statistics.ResourcesProcessed,
@@ -365,18 +365,18 @@ func (bo *DefaultBatchOptimizer) ProcessBatch(ctx context.Context, batch Resourc
 		"resourcesFailed", result.Statistics.ResourcesFailed,
 		"processingTime", result.ProcessingTime,
 		"success", result.Success)
-	
+
 	return result, nil
 }
 
 // ProcessBatches processes multiple batches concurrently
 func (bo *DefaultBatchOptimizer) ProcessBatches(ctx context.Context, batches []ResourceBatch, processor BatchProcessor) ([]*BatchResult, error) {
 	startTime := time.Now()
-	
+
 	bo.logger.Debug("Starting concurrent batch processing",
 		"totalBatches", len(batches),
 		"processor", processor.GetProcessorName())
-	
+
 	// Sort batches by priority and depth
 	sortedBatches := make([]ResourceBatch, len(batches))
 	copy(sortedBatches, batches)
@@ -386,62 +386,62 @@ func (bo *DefaultBatchOptimizer) ProcessBatches(ctx context.Context, batches []R
 		}
 		return sortedBatches[i].Depth < sortedBatches[j].Depth // Lower depth first
 	})
-	
+
 	// Process batches with limited concurrency
 	results := make([]*BatchResult, len(batches))
 	g, gCtx := errgroup.WithContext(ctx)
-	
+
 	// Semaphore to limit concurrent batch processing
 	maxConcurrency := 3 // Default to 3 concurrent batches
 	if len(batches) < maxConcurrency {
 		maxConcurrency = len(batches)
 	}
 	sem := make(chan struct{}, maxConcurrency)
-	
+
 	for i, batch := range sortedBatches {
 		i, batch := i, batch // Capture loop variables
 		g.Go(func() error {
 			// Acquire semaphore
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			
+
 			result, err := bo.ProcessBatch(gCtx, batch, processor)
 			if err != nil {
 				return fmt.Errorf("failed to process batch %s: %w", batch.ID, err)
 			}
-			
+
 			results[i] = result
 			return nil
 		})
 	}
-	
+
 	// Wait for all batches to complete
 	if err := g.Wait(); err != nil {
 		return results, err
 	}
-	
+
 	// Update statistics
 	bo.mu.Lock()
 	processingTime := time.Since(startTime)
 	bo.stats.ProcessingTime += processingTime
-	
+
 	totalResources := 0
 	for _, batch := range batches {
 		totalResources += len(batch.Resources)
 	}
-	
+
 	if processingTime > 0 && maxConcurrency > 0 {
 		// Calculate concurrency utilization (simplified)
 		bo.stats.ConcurrencyUtilization = float64(totalResources) / (processingTime.Seconds() * float64(maxConcurrency))
 	}
 	bo.mu.Unlock()
-	
+
 	bo.logger.Debug("Concurrent batch processing completed",
 		"totalBatches", len(batches),
 		"totalResources", totalResources,
 		"processingTime", processingTime,
 		"concurrency", maxConcurrency)
-	
+
 	return results, nil
 }
 
@@ -449,20 +449,20 @@ func (bo *DefaultBatchOptimizer) ProcessBatches(ctx context.Context, batches []R
 func (bo *DefaultBatchOptimizer) GetOptimizationStatistics() *BatchOptimizationStats {
 	bo.mu.RLock()
 	defer bo.mu.RUnlock()
-	
+
 	// Return a copy to prevent concurrent modification
 	statsCopy := *bo.stats
 	statsCopy.BatchTypes = make(map[BatchType]int)
 	statsCopy.DepthDistribution = make(map[int]int)
-	
+
 	for k, v := range bo.stats.BatchTypes {
 		statsCopy.BatchTypes[k] = v
 	}
-	
+
 	for k, v := range bo.stats.DepthDistribution {
 		statsCopy.DepthDistribution[k] = v
 	}
-	
+
 	return &statsCopy
 }
 
@@ -471,13 +471,13 @@ func (bo *DefaultBatchOptimizer) GetOptimizationStatistics() *BatchOptimizationS
 // batchBySize creates batches based on size limits
 func (bo *DefaultBatchOptimizer) batchBySize(resources []*unstructured.Unstructured, config *BatchConfig) []ResourceBatch {
 	var batches []ResourceBatch
-	
+
 	for i := 0; i < len(resources); i += config.BatchSize {
 		end := i + config.BatchSize
 		if end > len(resources) {
 			end = len(resources)
 		}
-		
+
 		batchResources := resources[i:end]
 		batch := ResourceBatch{
 			ID:        fmt.Sprintf("size-batch-%d", len(batches)),
@@ -488,11 +488,11 @@ func (bo *DefaultBatchOptimizer) batchBySize(resources []*unstructured.Unstructu
 			Metadata:  bo.createBatchMetadata(batchResources),
 			CreatedAt: time.Now(),
 		}
-		
+
 		batches = append(batches, batch)
 		bo.stats.BatchTypes[BatchTypeSize]++
 	}
-	
+
 	return batches
 }
 
@@ -504,9 +504,9 @@ func (bo *DefaultBatchOptimizer) batchByDepth(resources []*unstructured.Unstruct
 		depth := bo.getResourceDepth(resource)
 		resourcesByDepth[depth] = append(resourcesByDepth[depth], resource)
 	}
-	
+
 	var batches []ResourceBatch
-	
+
 	// Create batches for each depth level
 	for depth, depthResources := range resourcesByDepth {
 		// Further divide by batch size if needed
@@ -515,7 +515,7 @@ func (bo *DefaultBatchOptimizer) batchByDepth(resources []*unstructured.Unstruct
 			if end > len(depthResources) {
 				end = len(depthResources)
 			}
-			
+
 			batchResources := depthResources[i:end]
 			batch := ResourceBatch{
 				ID:        fmt.Sprintf("depth-%d-batch-%d", depth, len(batches)),
@@ -526,12 +526,12 @@ func (bo *DefaultBatchOptimizer) batchByDepth(resources []*unstructured.Unstruct
 				Metadata:  bo.createBatchMetadata(batchResources),
 				CreatedAt: time.Now(),
 			}
-			
+
 			batches = append(batches, batch)
 			bo.stats.BatchTypes[BatchTypeDepth]++
 		}
 	}
-	
+
 	return batches
 }
 
@@ -548,7 +548,7 @@ func (bo *DefaultBatchOptimizer) getResourceDepth(resource *unstructured.Unstruc
 			}
 		}
 	}
-	
+
 	// Fallback: try to infer from labels or return 0
 	return 0
 }
@@ -558,12 +558,12 @@ func (bo *DefaultBatchOptimizer) getAverageDepth(resources []*unstructured.Unstr
 	if len(resources) == 0 {
 		return 0
 	}
-	
+
 	totalDepth := 0
 	for _, resource := range resources {
 		totalDepth += bo.getResourceDepth(resource)
 	}
-	
+
 	return totalDepth / len(resources)
 }
 
@@ -578,7 +578,7 @@ func (bo *DefaultBatchOptimizer) createBatchMetadata(resources []*unstructured.U
 	apiGroups := make(map[string]bool)
 	kinds := make(map[string]bool)
 	namespaces := make(map[string]bool)
-	
+
 	for _, resource := range resources {
 		// Extract API group
 		apiVersion := resource.GetAPIVersion()
@@ -588,16 +588,16 @@ func (bo *DefaultBatchOptimizer) createBatchMetadata(resources []*unstructured.U
 		} else {
 			apiGroups["core"] = true
 		}
-		
+
 		// Extract kind
 		kinds[resource.GetKind()] = true
-		
+
 		// Extract namespace (if any)
 		if ns := resource.GetNamespace(); ns != "" {
 			namespaces[ns] = true
 		}
 	}
-	
+
 	metadata := &BatchMetadata{
 		APIGroups:               make([]string, 0, len(apiGroups)),
 		Kinds:                   make([]string, 0, len(kinds)),
@@ -605,7 +605,7 @@ func (bo *DefaultBatchOptimizer) createBatchMetadata(resources []*unstructured.U
 		EstimatedProcessingTime: time.Duration(len(resources)) * 100 * time.Millisecond, // Rough estimate
 		OptimizationHints:       make(map[string]interface{}),
 	}
-	
+
 	for apiGroup := range apiGroups {
 		metadata.APIGroups = append(metadata.APIGroups, apiGroup)
 	}
@@ -615,7 +615,7 @@ func (bo *DefaultBatchOptimizer) createBatchMetadata(resources []*unstructured.U
 	for namespace := range namespaces {
 		metadata.Namespaces = append(metadata.Namespaces, namespace)
 	}
-	
+
 	// Add optimization hints
 	if len(metadata.APIGroups) == 1 {
 		metadata.OptimizationHints["single_api_group"] = metadata.APIGroups[0]
@@ -626,7 +626,7 @@ func (bo *DefaultBatchOptimizer) createBatchMetadata(resources []*unstructured.U
 	if len(metadata.Namespaces) == 1 {
 		metadata.OptimizationHints["single_namespace"] = metadata.Namespaces[0]
 	}
-	
+
 	return metadata
 }
 

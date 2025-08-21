@@ -2,11 +2,11 @@ package traversal
 
 import (
 	"strings"
-	
+
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	
+
 	"github.com/crossplane/function-sdk-go/logging"
-	
+
 	dynamictypes "github.com/crossplane/function-kubecore-schema-registry/pkg/dynamic"
 )
 
@@ -14,16 +14,16 @@ import (
 type ScopeFilter interface {
 	// FilterResources filters resources based on scope configuration
 	FilterResources(resources []*unstructured.Unstructured, config *ScopeFilterConfig) []*unstructured.Unstructured
-	
+
 	// FilterReferences filters reference fields based on scope configuration
 	FilterReferences(references []dynamictypes.ReferenceField, config *ScopeFilterConfig) []dynamictypes.ReferenceField
-	
+
 	// ShouldIncludeResource determines if a resource should be included in traversal
 	ShouldIncludeResource(resource *unstructured.Unstructured, config *ScopeFilterConfig) bool
-	
+
 	// ShouldFollowReference determines if a reference should be followed
 	ShouldFollowReference(reference dynamictypes.ReferenceField, config *ScopeFilterConfig) bool
-	
+
 	// GetFilterStatistics returns statistics about filtering operations
 	GetFilterStatistics() *FilterStatistics
 }
@@ -32,10 +32,10 @@ type ScopeFilter interface {
 type DefaultScopeFilter struct {
 	// platformChecker determines if resources belong to platform scope
 	platformChecker PlatformChecker
-	
+
 	// logger provides structured logging
 	logger logging.Logger
-	
+
 	// statistics tracks filtering operations
 	statistics *FilterStatistics
 }
@@ -44,22 +44,22 @@ type DefaultScopeFilter struct {
 type FilterStatistics struct {
 	// ResourcesEvaluated is the total number of resources evaluated
 	ResourcesEvaluated int
-	
+
 	// ResourcesIncluded is the number of resources included after filtering
 	ResourcesIncluded int
-	
+
 	// ResourcesExcluded is the number of resources excluded by filtering
 	ResourcesExcluded int
-	
+
 	// ReferencesEvaluated is the total number of references evaluated
 	ReferencesEvaluated int
-	
+
 	// ReferencesIncluded is the number of references included after filtering
 	ReferencesIncluded int
-	
+
 	// ReferencesExcluded is the number of references excluded by filtering
 	ReferencesExcluded int
-	
+
 	// FilterReasons tracks reasons for exclusion
 	FilterReasons map[string]int
 }
@@ -68,13 +68,13 @@ type FilterStatistics struct {
 type PlatformChecker interface {
 	// IsPlatformResource determines if a resource belongs to the platform
 	IsPlatformResource(resource *unstructured.Unstructured) bool
-	
+
 	// IsPlatformAPIGroup determines if an API group belongs to the platform
 	IsPlatformAPIGroup(apiGroup string) bool
-	
+
 	// IsPlatformKind determines if a resource kind belongs to the platform
 	IsPlatformKind(kind string, apiGroup string) bool
-	
+
 	// GetPlatformAPIGroups returns all platform API groups
 	GetPlatformAPIGroups() []string
 }
@@ -83,7 +83,7 @@ type PlatformChecker interface {
 type DefaultPlatformChecker struct {
 	// platformAPIGroups contains patterns for platform API groups
 	platformAPIGroups []string
-	
+
 	// platformKinds contains platform-specific kinds
 	platformKinds map[string]bool
 }
@@ -103,35 +103,35 @@ func NewDefaultScopeFilter(platformChecker PlatformChecker, logger logging.Logge
 func NewDefaultPlatformChecker(platformAPIGroups []string) *DefaultPlatformChecker {
 	platformKinds := map[string]bool{
 		// Core Kubernetes resources that are NOT platform resources
-		"Pod":                false,
-		"Service":            false,
-		"ConfigMap":          false,
-		"Secret":             false,
+		"Pod":                   false,
+		"Service":               false,
+		"ConfigMap":             false,
+		"Secret":                false,
 		"PersistentVolumeClaim": false,
-		"PersistentVolume":   false,
-		"StorageClass":       false,
-		"Namespace":          false,
-		"Node":               false,
-		"Deployment":         false,
-		"ReplicaSet":         false,
-		"DaemonSet":          false,
-		"StatefulSet":        false,
-		"Job":                false,
-		"CronJob":            false,
-		
+		"PersistentVolume":      false,
+		"StorageClass":          false,
+		"Namespace":             false,
+		"Node":                  false,
+		"Deployment":            false,
+		"ReplicaSet":            false,
+		"DaemonSet":             false,
+		"StatefulSet":           false,
+		"Job":                   false,
+		"CronJob":               false,
+
 		// KubeCore platform resources
-		"KubeCluster":        true,
-		"KubEnv":             true,
-		"KubeApp":            true,
-		"KubeSystem":         true,
-		"KubeNet":            true,
-		"QualityGate":        true,
-		"GitHubProject":      true,
-		"GitHubInfra":        true,
-		"GitHubSystem":       true,
-		"GithubProvider":     true,
+		"KubeCluster":    true,
+		"KubEnv":         true,
+		"KubeApp":        true,
+		"KubeSystem":     true,
+		"KubeNet":        true,
+		"QualityGate":    true,
+		"GitHubProject":  true,
+		"GitHubInfra":    true,
+		"GitHubSystem":   true,
+		"GithubProvider": true,
 	}
-	
+
 	return &DefaultPlatformChecker{
 		platformAPIGroups: platformAPIGroups,
 		platformKinds:     platformKinds,
@@ -141,10 +141,10 @@ func NewDefaultPlatformChecker(platformAPIGroups []string) *DefaultPlatformCheck
 // FilterResources filters resources based on scope configuration
 func (sf *DefaultScopeFilter) FilterResources(resources []*unstructured.Unstructured, config *ScopeFilterConfig) []*unstructured.Unstructured {
 	var filtered []*unstructured.Unstructured
-	
+
 	for _, resource := range resources {
 		sf.statistics.ResourcesEvaluated++
-		
+
 		if sf.ShouldIncludeResource(resource, config) {
 			filtered = append(filtered, resource)
 			sf.statistics.ResourcesIncluded++
@@ -152,22 +152,22 @@ func (sf *DefaultScopeFilter) FilterResources(resources []*unstructured.Unstruct
 			sf.statistics.ResourcesExcluded++
 		}
 	}
-	
+
 	sf.logger.Debug("Filtered resources",
 		"total", len(resources),
 		"included", len(filtered),
 		"excluded", len(resources)-len(filtered))
-	
+
 	return filtered
 }
 
 // FilterReferences filters reference fields based on scope configuration
 func (sf *DefaultScopeFilter) FilterReferences(references []dynamictypes.ReferenceField, config *ScopeFilterConfig) []dynamictypes.ReferenceField {
 	var filtered []dynamictypes.ReferenceField
-	
+
 	for _, reference := range references {
 		sf.statistics.ReferencesEvaluated++
-		
+
 		if sf.ShouldFollowReference(reference, config) {
 			filtered = append(filtered, reference)
 			sf.statistics.ReferencesIncluded++
@@ -175,12 +175,12 @@ func (sf *DefaultScopeFilter) FilterReferences(references []dynamictypes.Referen
 			sf.statistics.ReferencesExcluded++
 		}
 	}
-	
+
 	sf.logger.Debug("Filtered references",
 		"total", len(references),
 		"included", len(filtered),
 		"excluded", len(references)-len(filtered))
-	
+
 	return filtered
 }
 
@@ -191,7 +191,7 @@ func (sf *DefaultScopeFilter) ShouldIncludeResource(resource *unstructured.Unstr
 	kind := resource.GetKind()
 	namespace := resource.GetNamespace()
 	apiGroup := sf.extractAPIGroup(apiVersion)
-	
+
 	// Apply platform-only filter
 	if config.PlatformOnly {
 		if !sf.platformChecker.IsPlatformResource(resource) {
@@ -199,7 +199,7 @@ func (sf *DefaultScopeFilter) ShouldIncludeResource(resource *unstructured.Unstr
 			return false
 		}
 	}
-	
+
 	// Apply API group filters
 	if len(config.IncludeAPIGroups) > 0 {
 		if !sf.matchesAPIGroupPatterns(apiGroup, config.IncludeAPIGroups) {
@@ -207,14 +207,14 @@ func (sf *DefaultScopeFilter) ShouldIncludeResource(resource *unstructured.Unstr
 			return false
 		}
 	}
-	
+
 	if len(config.ExcludeAPIGroups) > 0 {
 		if sf.matchesAPIGroupPatterns(apiGroup, config.ExcludeAPIGroups) {
 			sf.statistics.FilterReasons["api_group_excluded"]++
 			return false
 		}
 	}
-	
+
 	// Apply kind filters
 	if len(config.IncludeKinds) > 0 {
 		if !sf.stringInSlice(kind, config.IncludeKinds) {
@@ -222,14 +222,14 @@ func (sf *DefaultScopeFilter) ShouldIncludeResource(resource *unstructured.Unstr
 			return false
 		}
 	}
-	
+
 	if len(config.ExcludeKinds) > 0 {
 		if sf.stringInSlice(kind, config.ExcludeKinds) {
 			sf.statistics.FilterReasons["kind_excluded"]++
 			return false
 		}
 	}
-	
+
 	// Apply namespace filters
 	if namespace != "" { // Only apply to namespaced resources
 		if len(config.IncludeNamespaces) > 0 {
@@ -238,7 +238,7 @@ func (sf *DefaultScopeFilter) ShouldIncludeResource(resource *unstructured.Unstr
 				return false
 			}
 		}
-		
+
 		if len(config.ExcludeNamespaces) > 0 {
 			if sf.stringInSlice(namespace, config.ExcludeNamespaces) {
 				sf.statistics.FilterReasons["namespace_excluded"]++
@@ -246,7 +246,7 @@ func (sf *DefaultScopeFilter) ShouldIncludeResource(resource *unstructured.Unstr
 			}
 		}
 	}
-	
+
 	return true
 }
 
@@ -259,7 +259,7 @@ func (sf *DefaultScopeFilter) ShouldFollowReference(reference dynamictypes.Refer
 			return false
 		}
 	}
-	
+
 	// Apply API group filters for references
 	if len(config.IncludeAPIGroups) > 0 {
 		if !sf.matchesAPIGroupPatterns(reference.TargetGroup, config.IncludeAPIGroups) {
@@ -267,14 +267,14 @@ func (sf *DefaultScopeFilter) ShouldFollowReference(reference dynamictypes.Refer
 			return false
 		}
 	}
-	
+
 	if len(config.ExcludeAPIGroups) > 0 {
 		if sf.matchesAPIGroupPatterns(reference.TargetGroup, config.ExcludeAPIGroups) {
 			sf.statistics.FilterReasons["ref_api_group_excluded"]++
 			return false
 		}
 	}
-	
+
 	// Apply kind filters for references
 	if len(config.IncludeKinds) > 0 {
 		if !sf.stringInSlice(reference.TargetKind, config.IncludeKinds) {
@@ -282,14 +282,14 @@ func (sf *DefaultScopeFilter) ShouldFollowReference(reference dynamictypes.Refer
 			return false
 		}
 	}
-	
+
 	if len(config.ExcludeKinds) > 0 {
 		if sf.stringInSlice(reference.TargetKind, config.ExcludeKinds) {
 			sf.statistics.FilterReasons["ref_kind_excluded"]++
 			return false
 		}
 	}
-	
+
 	// Check cross-namespace references
 	if !config.CrossNamespaceEnabled {
 		// This is a simplified check - in practice we'd need to compare
@@ -301,7 +301,7 @@ func (sf *DefaultScopeFilter) ShouldFollowReference(reference dynamictypes.Refer
 			return false
 		}
 	}
-	
+
 	return true
 }
 
@@ -316,12 +316,12 @@ func (sf *DefaultScopeFilter) GetFilterStatistics() *FilterStatistics {
 func (pc *DefaultPlatformChecker) IsPlatformResource(resource *unstructured.Unstructured) bool {
 	apiGroup := pc.extractAPIGroup(resource.GetAPIVersion())
 	kind := resource.GetKind()
-	
+
 	// First check by API group
 	if pc.IsPlatformAPIGroup(apiGroup) {
 		return true
 	}
-	
+
 	// Then check by kind
 	return pc.IsPlatformKind(kind, apiGroup)
 }
@@ -342,7 +342,7 @@ func (pc *DefaultPlatformChecker) IsPlatformKind(kind string, apiGroup string) b
 	if isPlatform, exists := pc.platformKinds[kind]; exists {
 		return isPlatform
 	}
-	
+
 	// If kind is unknown, check by API group
 	return pc.IsPlatformAPIGroup(apiGroup)
 }
@@ -350,6 +350,15 @@ func (pc *DefaultPlatformChecker) IsPlatformKind(kind string, apiGroup string) b
 // GetPlatformAPIGroups returns all platform API groups
 func (pc *DefaultPlatformChecker) GetPlatformAPIGroups() []string {
 	return pc.platformAPIGroups
+}
+
+// GetAPIGroupScope returns the scope of an API group (platform, external)
+func (pc *DefaultPlatformChecker) GetAPIGroupScope(apiVersion string) string {
+	apiGroup := pc.extractAPIGroup(apiVersion)
+	if pc.IsPlatformAPIGroup(apiGroup) {
+		return "platform"
+	}
+	return "external"
 }
 
 // Helper methods
@@ -388,17 +397,17 @@ func (sf *DefaultScopeFilter) matchesPattern(value, pattern string) bool {
 	if pattern == "*" {
 		return true
 	}
-	
+
 	if strings.HasPrefix(pattern, "*.") {
 		suffix := strings.TrimPrefix(pattern, "*.")
 		return strings.HasSuffix(value, suffix)
 	}
-	
+
 	if strings.HasSuffix(pattern, "*") {
 		prefix := strings.TrimSuffix(pattern, "*")
 		return strings.HasPrefix(value, prefix)
 	}
-	
+
 	return value == pattern
 }
 
@@ -408,17 +417,17 @@ func (pc *DefaultPlatformChecker) matchesPattern(value, pattern string) bool {
 	if pattern == "*" {
 		return true
 	}
-	
+
 	if strings.HasPrefix(pattern, "*.") {
 		suffix := strings.TrimPrefix(pattern, "*.")
 		return strings.HasSuffix(value, suffix)
 	}
-	
+
 	if strings.HasSuffix(pattern, "*") {
 		prefix := strings.TrimSuffix(pattern, "*")
 		return strings.HasPrefix(value, prefix)
 	}
-	
+
 	return value == pattern
 }
 

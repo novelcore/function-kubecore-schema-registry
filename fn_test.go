@@ -446,8 +446,8 @@ func TestEmbeddedRegistry(t *testing.T) {
 
 	// Test specific resource types
 	testCases := []struct {
-		apiVersion string
-		kind       string
+		apiVersion  string
+		kind        string
 		shouldExist bool
 		namespaced  bool
 	}{
@@ -464,7 +464,7 @@ func TestEmbeddedRegistry(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.apiVersion+"/"+tc.kind, func(t *testing.T) {
 			resourceType, err := f.registry.GetResourceType(tc.apiVersion, tc.kind)
-			
+
 			if tc.shouldExist {
 				if err != nil {
 					t.Errorf("Expected resource type %s/%s to exist, got error: %v", tc.apiVersion, tc.kind, err)

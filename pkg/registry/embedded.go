@@ -18,7 +18,7 @@ func NewEmbeddedRegistry() *EmbeddedRegistry {
 	r := &EmbeddedRegistry{
 		resourceTypes: make(map[string]*ResourceType),
 	}
-	
+
 	r.loadBuiltinTypes()
 	return r
 }
@@ -27,14 +27,14 @@ func NewEmbeddedRegistry() *EmbeddedRegistry {
 func (r *EmbeddedRegistry) GetResourceType(apiVersion, kind string) (*ResourceType, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	
+
 	key := fmt.Sprintf("%s/%s", apiVersion, kind)
 	rt, exists := r.resourceTypes[key]
 	if !exists {
-		return nil, errors.New(errors.ErrorCodeResourceNotFound, 
+		return nil, errors.New(errors.ErrorCodeResourceNotFound,
 			fmt.Sprintf("resource type %s not found in registry", key))
 	}
-	
+
 	return rt, nil
 }
 
@@ -42,12 +42,12 @@ func (r *EmbeddedRegistry) GetResourceType(apiVersion, kind string) (*ResourceTy
 func (r *EmbeddedRegistry) ListResourceTypes() ([]*ResourceType, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	
+
 	types := make([]*ResourceType, 0, len(r.resourceTypes))
 	for _, rt := range r.resourceTypes {
 		types = append(types, rt)
 	}
-	
+
 	return types, nil
 }
 
@@ -66,12 +66,12 @@ func (r *EmbeddedRegistry) GetReferences(apiVersion, kind string) ([]ResourceRef
 	if err != nil {
 		return nil, err
 	}
-	
+
 	var references []ResourceReference
 	for _, field := range rt.Fields {
 		references = append(references, field.References...)
 	}
-	
+
 	return references, nil
 }
 
@@ -79,7 +79,7 @@ func (r *EmbeddedRegistry) GetReferences(apiVersion, kind string) ([]ResourceRef
 func (r *EmbeddedRegistry) RegisterType(rt *ResourceType) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	
+
 	key := fmt.Sprintf("%s/%s", rt.APIVersion, rt.Kind)
 	r.resourceTypes[key] = rt
 }
@@ -88,10 +88,10 @@ func (r *EmbeddedRegistry) RegisterType(rt *ResourceType) {
 func (r *EmbeddedRegistry) loadBuiltinTypes() {
 	// Core Kubernetes types
 	r.loadCoreKubernetesTypes()
-	
+
 	// KubeCore platform types
 	r.loadKubeCoreTypes()
-	
+
 	// GitHub platform types
 	r.loadGitHubPlatformTypes()
 }
@@ -197,7 +197,7 @@ func (r *EmbeddedRegistry) loadCoreKubernetesTypes() {
 				Type: "object",
 				Properties: map[string]FieldSchema{
 					"selector": {
-						Type: "object",
+						Type:        "object",
 						Description: "Label selector for pods",
 					},
 				},
@@ -216,7 +216,7 @@ func (r *EmbeddedRegistry) loadCoreKubernetesTypes() {
 		Singular:   "configmap",
 		Fields: map[string]FieldSchema{
 			"data": {
-				Type: "object",
+				Type:        "object",
 				Description: "Configuration data",
 			},
 		},
@@ -233,7 +233,7 @@ func (r *EmbeddedRegistry) loadCoreKubernetesTypes() {
 		Singular:   "secret",
 		Fields: map[string]FieldSchema{
 			"data": {
-				Type: "object",
+				Type:        "object",
 				Description: "Secret data",
 			},
 		},
@@ -282,7 +282,7 @@ func (r *EmbeddedRegistry) loadCoreKubernetesTypes() {
 				Type: "object",
 				Properties: map[string]FieldSchema{
 					"template": {
-						Type: "object",
+						Type:        "object",
 						Description: "Pod template",
 					},
 				},

@@ -15,12 +15,12 @@ const (
 type RefType string
 
 const (
-	RefTypeOwnerRef   RefType = "ownerRef"   // metadata.ownerReferences
-	RefTypeConfigMap  RefType = "configMap"  // Reference to ConfigMap
-	RefTypeSecret     RefType = "secret"     // Reference to Secret
-	RefTypeService    RefType = "service"    // Reference to Service
-	RefTypePVC        RefType = "pvc"        // Reference to PersistentVolumeClaim
-	RefTypeCustom     RefType = "custom"     // Custom reference (platform-specific)
+	RefTypeOwnerRef  RefType = "ownerRef"  // metadata.ownerReferences
+	RefTypeConfigMap RefType = "configMap" // Reference to ConfigMap
+	RefTypeSecret    RefType = "secret"    // Reference to Secret
+	RefTypeService   RefType = "service"   // Reference to Service
+	RefTypePVC       RefType = "pvc"       // Reference to PersistentVolumeClaim
+	RefTypeCustom    RefType = "custom"    // Custom reference (platform-specific)
 )
 
 // SourceInfo contains information about the registry data source
@@ -34,14 +34,14 @@ type SourceInfo struct {
 
 // RegistryConfig contains configuration for registry creation
 type RegistryConfig struct {
-	Mode              RegistryMode
-	APIGroupPatterns  []string
-	Timeout           time.Duration
-	FallbackEnabled   bool
-	RefPatterns       []string
-	CacheEnabled      bool
-	CacheTTL          time.Duration
-	LogLevel          string
+	Mode             RegistryMode
+	APIGroupPatterns []string
+	Timeout          time.Duration
+	FallbackEnabled  bool
+	RefPatterns      []string
+	CacheEnabled     bool
+	CacheTTL         time.Duration
+	LogLevel         string
 }
 
 // Default configuration values

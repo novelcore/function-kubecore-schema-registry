@@ -26,11 +26,11 @@ type CRDDiscoverer interface {
 
 // DefaultCRDDiscoverer implements CRD discovery using Kubernetes API
 type DefaultCRDDiscoverer struct {
-	client    apiextensionsclientset.Interface
-	logger    logging.Logger
-	cache     *CRDCache
-	metrics   *DiscoveryMetrics
-	mu        sync.RWMutex
+	client  apiextensionsclientset.Interface
+	logger  logging.Logger
+	cache   *CRDCache
+	metrics *DiscoveryMetrics
+	mu      sync.RWMutex
 }
 
 // CRDCache provides caching for discovered CRDs
@@ -49,14 +49,14 @@ type CacheEntry struct {
 
 // DiscoveryMetrics tracks performance metrics
 type DiscoveryMetrics struct {
-	TotalCRDs       int
-	MatchedCRDs     int
-	CacheHits       int
-	CacheMisses     int
-	DiscoveryTime   time.Duration
-	ProcessingTime  time.Duration
-	Errors          []error
-	mu              sync.RWMutex
+	TotalCRDs      int
+	MatchedCRDs    int
+	CacheHits      int
+	CacheMisses    int
+	DiscoveryTime  time.Duration
+	ProcessingTime time.Duration
+	Errors         []error
+	mu             sync.RWMutex
 }
 
 // NewCRDDiscoverer creates a new CRD discoverer
@@ -85,26 +85,26 @@ func (d *DefaultCRDDiscoverer) DiscoverCRDs(ctx context.Context, patterns []stri
 // DiscoverWithTimeout discovers CRDs with a specified timeout
 func (d *DefaultCRDDiscoverer) DiscoverWithTimeout(ctx context.Context, patterns []string, timeout time.Duration) ([]*CRDInfo, error) {
 	startTime := time.Now()
-	
+
 	d.logger.Info("Starting CRD discovery", "patterns", patterns, "timeout", timeout)
-	
+
 	// Create context with timeout
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	
+
 	// Reset metrics
 	d.resetMetrics()
-	
+
 	// List all CRDs from cluster
 	crdList, err := d.client.ApiextensionsV1().CustomResourceDefinitions().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		d.recordError(errors.Wrap(err, "failed to list CRDs from cluster"))
 		return nil, errors.Wrap(err, "failed to list CRDs from cluster")
 	}
-	
+
 	d.logger.Info("Found CRDs in cluster", "total", len(crdList.Items))
 	d.metrics.TotalCRDs = len(crdList.Items)
-	
+
 	// Filter CRDs by patterns
 	var matchedCRDs []apiextv1.CustomResourceDefinition
 	for _, crd := range crdList.Items {
@@ -112,26 +112,26 @@ func (d *DefaultCRDDiscoverer) DiscoverWithTimeout(ctx context.Context, patterns
 			matchedCRDs = append(matchedCRDs, crd)
 		}
 	}
-	
+
 	d.logger.Info("CRDs matching patterns", "matched", len(matchedCRDs), "total", len(crdList.Items))
 	d.metrics.MatchedCRDs = len(matchedCRDs)
-	
+
 	// Process CRDs concurrently
 	crdInfos, err := d.processCRDsConcurrently(ctx, matchedCRDs)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Record timing
 	duration := time.Since(startTime)
 	d.metrics.DiscoveryTime = duration
-	
+
 	d.logger.Info("CRD discovery completed",
 		"discovered", len(crdInfos),
 		"duration", duration,
 		"cache_hits", d.metrics.CacheHits,
 		"cache_misses", d.metrics.CacheMisses)
-	
+
 	return crdInfos, nil
 }
 
@@ -139,10 +139,10 @@ func (d *DefaultCRDDiscoverer) DiscoverWithTimeout(ctx context.Context, patterns
 func (d *DefaultCRDDiscoverer) processCRDsConcurrently(ctx context.Context, crds []apiextv1.CustomResourceDefinition) ([]*CRDInfo, error) {
 	g, gCtx := errgroup.WithContext(ctx)
 	g.SetLimit(DefaultMaxConcurrency) // Limit concurrent workers
-	
+
 	var mu sync.Mutex
 	var crdInfos []*CRDInfo
-	
+
 	for _, crd := range crds {
 		crd := crd // capture loop variable
 		g.Go(func() error {
@@ -152,12 +152,12 @@ func (d *DefaultCRDDiscoverer) processCRDsConcurrently(ctx context.Context, crds
 				d.recordError(err)
 				return nil // Don't fail the whole operation for one CRD
 			}
-			
+
 			if info != nil {
 				mu.Lock()
 				crdInfos = append(crdInfos, info)
 				mu.Unlock()
-				
+
 				d.logger.Debug("Processed CRD",
 					"name", info.Name,
 					"group", info.Group,
@@ -165,15 +165,15 @@ func (d *DefaultCRDDiscoverer) processCRDsConcurrently(ctx context.Context, crds
 					"namespaced", info.Namespaced,
 					"references", len(info.References))
 			}
-			
+
 			return nil
 		})
 	}
-	
+
 	if err := g.Wait(); err != nil {
 		return nil, err
 	}
-	
+
 	return crdInfos, nil
 }
 
@@ -185,18 +185,18 @@ func (d *DefaultCRDDiscoverer) processCRD(ctx context.Context, crd *apiextv1.Cus
 		d.recordCacheHit()
 		return cached, nil
 	}
-	
+
 	d.recordCacheMiss()
-	
+
 	// Extract basic CRD information
 	info, err := d.extractCRDInfo(crd)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to extract info from CRD %s", crd.Name)
 	}
-	
+
 	// Cache the result
 	d.cache.Set(cacheKey, info)
-	
+
 	return info, nil
 }
 
@@ -210,11 +210,11 @@ func (d *DefaultCRDDiscoverer) extractCRDInfo(crd *apiextv1.CustomResourceDefini
 			latestVersion = version
 		}
 	}
-	
+
 	if latestVersion == nil {
 		return nil, fmt.Errorf("no versions found for CRD %s", crd.Name)
 	}
-	
+
 	// Extract schema
 	var schema *ResourceSchema
 	if latestVersion.Schema != nil && latestVersion.Schema.OpenAPIV3Schema != nil {
@@ -226,7 +226,7 @@ func (d *DefaultCRDDiscoverer) extractCRDInfo(crd *apiextv1.CustomResourceDefini
 			schema = parsed
 		}
 	}
-	
+
 	// Create CRD info
 	info := &CRDInfo{
 		Name:       crd.Name,
@@ -246,7 +246,7 @@ func (d *DefaultCRDDiscoverer) extractCRDInfo(crd *apiextv1.CustomResourceDefini
 		},
 		ParsedAt: time.Now(),
 	}
-	
+
 	return info, nil
 }
 
@@ -255,14 +255,14 @@ func (d *DefaultCRDDiscoverer) parseOpenAPISchema(schema *apiextv1.JSONSchemaPro
 	if schema == nil {
 		return nil, fmt.Errorf("schema is nil")
 	}
-	
+
 	resourceSchema := &ResourceSchema{
 		Fields:      make(map[string]*FieldDefinition),
 		Description: schema.Description,
 		Required:    schema.Required,
 		Properties:  make(map[string]*ResourceSchema),
 	}
-	
+
 	// Parse properties recursively
 	if schema.Properties != nil {
 		for propName, propSchema := range schema.Properties {
@@ -270,7 +270,7 @@ func (d *DefaultCRDDiscoverer) parseOpenAPISchema(schema *apiextv1.JSONSchemaPro
 			resourceSchema.Fields[propName] = field
 		}
 	}
-	
+
 	return resourceSchema, nil
 }
 
@@ -284,7 +284,7 @@ func (d *DefaultCRDDiscoverer) parseFieldDefinition(name string, schema *apiextv
 		Pattern:     schema.Pattern,
 		Default:     schema.Default,
 	}
-	
+
 	// Handle enum values
 	if schema.Enum != nil {
 		field.Enum = make([]string, len(schema.Enum))
@@ -301,7 +301,7 @@ func (d *DefaultCRDDiscoverer) parseFieldDefinition(name string, schema *apiextv
 			}
 		}
 	}
-	
+
 	// Handle nested properties
 	if schema.Properties != nil {
 		field.Properties = make(map[string]*FieldDefinition)
@@ -309,12 +309,12 @@ func (d *DefaultCRDDiscoverer) parseFieldDefinition(name string, schema *apiextv
 			field.Properties[propName] = d.parseFieldDefinition(propName, &propSchema)
 		}
 	}
-	
+
 	// Handle array items
 	if schema.Items != nil && schema.Items.Schema != nil {
 		field.Items = d.parseFieldDefinition("", schema.Items.Schema)
 	}
-	
+
 	return field
 }
 
@@ -341,7 +341,7 @@ func (d *DefaultCRDDiscoverer) getCacheKey(crd *apiextv1.CustomResourceDefinitio
 func (d *DefaultCRDDiscoverer) GetDiscoveryStatistics() *DiscoveryStatistics {
 	d.metrics.mu.RLock()
 	defer d.metrics.mu.RUnlock()
-	
+
 	return &DiscoveryStatistics{
 		TotalCRDs:     d.metrics.TotalCRDs,
 		MatchedCRDs:   d.metrics.MatchedCRDs,
@@ -356,18 +356,18 @@ func (d *DefaultCRDDiscoverer) GetDiscoveryStatistics() *DiscoveryStatistics {
 func (c *CRDCache) Get(key string) *CRDInfo {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	
+
 	entry, exists := c.entries[key]
 	if !exists {
 		return nil
 	}
-	
+
 	if time.Now().After(entry.ExpiresAt) {
 		// Entry expired
 		delete(c.entries, key)
 		return nil
 	}
-	
+
 	return entry.CRDInfo
 }
 
@@ -375,7 +375,7 @@ func (c *CRDCache) Get(key string) *CRDInfo {
 func (c *CRDCache) Set(key string, info *CRDInfo) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	c.entries[key] = &CacheEntry{
 		CRDInfo:   info,
 		CachedAt:  time.Now(),
@@ -387,7 +387,7 @@ func (c *CRDCache) Set(key string, info *CRDInfo) {
 func (c *CRDCache) Clear() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	c.entries = make(map[string]*CacheEntry)
 }
 
@@ -396,7 +396,7 @@ func (c *CRDCache) Clear() {
 func (d *DefaultCRDDiscoverer) resetMetrics() {
 	d.metrics.mu.Lock()
 	defer d.metrics.mu.Unlock()
-	
+
 	d.metrics.TotalCRDs = 0
 	d.metrics.MatchedCRDs = 0
 	d.metrics.CacheHits = 0
@@ -409,20 +409,20 @@ func (d *DefaultCRDDiscoverer) resetMetrics() {
 func (d *DefaultCRDDiscoverer) recordError(err error) {
 	d.metrics.mu.Lock()
 	defer d.metrics.mu.Unlock()
-	
+
 	d.metrics.Errors = append(d.metrics.Errors, err)
 }
 
 func (d *DefaultCRDDiscoverer) recordCacheHit() {
 	d.metrics.mu.Lock()
 	defer d.metrics.mu.Unlock()
-	
+
 	d.metrics.CacheHits++
 }
 
 func (d *DefaultCRDDiscoverer) recordCacheMiss() {
 	d.metrics.mu.Lock()
 	defer d.metrics.mu.Unlock()
-	
+
 	d.metrics.CacheMisses++
 }

@@ -77,7 +77,7 @@ func (r *LabelResolver) Resolve(ctx context.Context, request v1beta1.ResourceReq
 			// Log error but continue with other namespaces
 			continue
 		}
-		
+
 		allResources = append(allResources, resources...)
 		searchedNamespaces = append(searchedNamespaces, namespace)
 	}
@@ -158,8 +158,8 @@ func (r *LabelResolver) getTargetNamespaces(request v1beta1.ResourceRequest) []s
 }
 
 // fetchFromNamespace fetches resources from a specific namespace
-func (r *LabelResolver) fetchFromNamespace(ctx context.Context, gvr schema.GroupVersionResource, 
-	namespace string, labelSelector labels.Selector, request v1beta1.ResourceRequest, 
+func (r *LabelResolver) fetchFromNamespace(ctx context.Context, gvr schema.GroupVersionResource,
+	namespace string, labelSelector labels.Selector, request v1beta1.ResourceRequest,
 	startTime time.Time) ([]*FetchedResource, error) {
 
 	var resource dynamic.ResourceInterface
@@ -220,7 +220,7 @@ func (r *LabelResolver) getMatchedLabels(resource interface{}, selector labels.S
 }
 
 // applyMatchStrategy applies strategy constraints and sorting
-func (r *LabelResolver) applyMatchStrategy(resources []*FetchedResource, 
+func (r *LabelResolver) applyMatchStrategy(resources []*FetchedResource,
 	request v1beta1.ResourceRequest, searchedNamespaces []string) ([]*FetchedResource, error) {
 
 	// Update search namespaces for all resources
