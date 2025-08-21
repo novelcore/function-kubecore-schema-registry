@@ -1,0 +1,10 @@
+# Test Composition Resource (XR) to test scope filtering fixes  
+apiVersion: test.kubecore.platform.io/v1alpha1
+kind: XReferenceResolutionTest
+metadata:
+  name: scope-filtering-fix-test
+  namespace: default
+spec:
+  testName: "scope-filtering-bug-fixes"
+  expectedResources: 2  # GitHubProject + GithubProvider 
+  maxDepth: 3

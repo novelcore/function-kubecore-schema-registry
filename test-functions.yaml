@@ -1,0 +1,8 @@
+apiVersion: pkg.crossplane.io/v1beta1
+kind: Function
+metadata:
+  name: function-kubecore-schema-registry
+  annotations:
+    render.crossplane.io/runtime: "Development"
+spec:
+  package: kubecore/function-kubecore-schema-registry:latest

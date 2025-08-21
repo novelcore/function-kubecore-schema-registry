@@ -201,18 +201,50 @@ func (rr *DefaultReferenceResolver) ResolveReference(ctx context.Context, source
 		return nil, functionerrors.Wrap(err, "failed to build GroupVersionResource")
 	}
 
+	// Special handling for cluster-scoped resources
+	isClusterScoped := rr.isClusterScopedResource(reference.TargetKind, reference.TargetGroup)
+
 	// Resolve the reference
 	var resolvedResource *unstructured.Unstructured
 
-	if targetNamespace != "" {
+	rr.logger.Debug("Attempting to resolve reference",
+		"targetKind", reference.TargetKind,
+		"targetGroup", reference.TargetGroup,
+		"targetName", targetName,
+		"targetNamespace", targetNamespace,
+		"isClusterScoped", isClusterScoped,
+		"gvr", gvr.String())
+
+	if isClusterScoped {
+		// Force cluster-scoped lookup for resources like GithubProvider
+		rr.logger.Debug("Performing cluster-scoped resource lookup", "targetKind", reference.TargetKind)
+		resolvedResource, err = rr.dynamicClient.Resource(gvr).Get(ctx, targetName, metav1.GetOptions{})
+	} else if targetNamespace != "" {
 		// Namespaced resource
+		rr.logger.Debug("Performing namespaced resource lookup", "targetKind", reference.TargetKind, "namespace", targetNamespace)
 		resolvedResource, err = rr.dynamicClient.Resource(gvr).Namespace(targetNamespace).Get(ctx, targetName, metav1.GetOptions{})
 	} else {
-		// Cluster-scoped resource
+		// Try both - first cluster-scoped, then default namespace
+		rr.logger.Debug("Trying both cluster-scoped and namespaced lookup", "targetKind", reference.TargetKind)
 		resolvedResource, err = rr.dynamicClient.Resource(gvr).Get(ctx, targetName, metav1.GetOptions{})
+		if err != nil {
+			rr.logger.Debug("Cluster-scoped lookup failed, trying default namespace", "error", err)
+			// Try with default namespace
+			defaultNamespace := source.GetNamespace()
+			if defaultNamespace == "" {
+				defaultNamespace = "default"
+			}
+			resolvedResource, err = rr.dynamicClient.Resource(gvr).Namespace(defaultNamespace).Get(ctx, targetName, metav1.GetOptions{})
+		}
 	}
 
 	if err != nil {
+		rr.logger.Debug("Failed to resolve reference",
+			"targetKind", reference.TargetKind,
+			"targetName", targetName,
+			"targetNamespace", targetNamespace,
+			"isClusterScoped", isClusterScoped,
+			"error", err)
 		return nil, functionerrors.Wrap(err, fmt.Sprintf("failed to resolve reference to %s/%s", reference.TargetKind, targetName))
 	}
 
@@ -360,12 +392,8 @@ func (rr *DefaultReferenceResolver) convertToResourceSchema(resource *unstructur
 		rr.analyzeFields(status, "", statusField.Properties)
 		rootFields["status"] = statusField
 		
-		// Also add status fields directly to root for pattern matching
-		for fieldName, fieldDef := range statusField.Properties {
-			if _, exists := rootFields[fieldName]; !exists { // Avoid overriding spec fields
-				rootFields[fieldName] = fieldDef
-			}
-		}
+		// Don't add status fields directly to root to avoid noise in pattern matching
+		// Status fields are less likely to contain references and can cause false positives
 	}
 
 	return &dynamictypes.ResourceSchema{
@@ -555,6 +583,17 @@ func (rr *DefaultReferenceResolver) parseReferenceValue(refValue interface{}, re
 
 // buildGVR builds a GroupVersionResource from the reference information
 func (rr *DefaultReferenceResolver) buildGVR(group, version, kind string) (schema.GroupVersionResource, error) {
+	// Special handling for GitHub resources - they use v1alpha1
+	if strings.Contains(group, "github") || kind == "GithubProvider" {
+		if version == "" {
+			version = "v1alpha1"
+		}
+		rr.logger.Debug("Using GitHub-specific API version",
+			"group", group,
+			"kind", kind,
+			"version", version)
+	}
+
 	// Default version if not specified
 	if version == "" {
 		version = "v1"
@@ -563,11 +602,20 @@ func (rr *DefaultReferenceResolver) buildGVR(group, version, kind string) (schem
 	// Convert kind to resource name (pluralize and lowercase)
 	resource := rr.kindToResource(kind)
 
-	return schema.GroupVersionResource{
+	gvr := schema.GroupVersionResource{
 		Group:    group,
 		Version:  version,
 		Resource: resource,
-	}, nil
+	}
+
+	rr.logger.Debug("Built GroupVersionResource",
+		"group", group,
+		"version", version,
+		"kind", kind,
+		"resource", resource,
+		"gvr", gvr.String())
+
+	return gvr, nil
 }
 
 // kindToResource converts a Kubernetes Kind to a resource name
@@ -635,4 +683,42 @@ func (rr *DefaultReferenceResolver) getFieldNames(fields map[string]*dynamictype
 		names = append(names, name)
 	}
 	return names
+}
+
+// isClusterScopedResource determines if a resource kind/group is cluster-scoped
+func (rr *DefaultReferenceResolver) isClusterScopedResource(kind, group string) bool {
+	// Known cluster-scoped resources
+	clusterScopedResources := map[string]map[string]bool{
+		// Core Kubernetes cluster-scoped resources
+		"": {
+			"Node":                      true,
+			"PersistentVolume":          true,
+			"StorageClass":              true,
+			"ClusterRole":               true,
+			"ClusterRoleBinding":        true,
+			"CustomResourceDefinition":  true,
+		},
+		// GitHub platform resources are typically cluster-scoped
+		"github.platform.kubecore.io": {
+			"GithubProvider": true,
+			"GitHubSystem":   true,
+		},
+		// Platform resources that might be cluster-scoped
+		"platform.kubecore.io": {
+			"KubeCluster": true, // Clusters are typically cluster-scoped
+		},
+	}
+
+	if groupMap, exists := clusterScopedResources[group]; exists {
+		if isClusterScoped, exists := groupMap[kind]; exists {
+			return isClusterScoped
+		}
+	}
+
+	// Default assumption: if it's a "Provider" or "Cluster" kind, it's likely cluster-scoped
+	if strings.HasSuffix(kind, "Provider") || strings.HasSuffix(kind, "Cluster") {
+		return true
+	}
+
+	return false
 }

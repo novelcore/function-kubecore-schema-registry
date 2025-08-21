@@ -253,8 +253,28 @@ func (te *DefaultTraversalEngine) DiscoverReferencedResources(ctx context.Contex
 				return nil // Don't fail the entire operation
 			}
 
+			// Apply confidence threshold filtering to remove false positives
+			highConfidenceReferences := make([]dynamictypes.ReferenceField, 0)
+			for _, ref := range references {
+				// Skip references with low confidence AND empty TargetKind (likely false positives)
+				if ref.Confidence < 0.7 && ref.TargetKind == "" {
+					te.logger.Debug("Filtered out low-confidence reference with empty TargetKind",
+						"fieldName", ref.FieldName,
+						"fieldPath", ref.FieldPath,
+						"confidence", ref.Confidence,
+						"detectionMethod", ref.DetectionMethod)
+					continue
+				}
+				highConfidenceReferences = append(highConfidenceReferences, ref)
+			}
+
+			te.logger.Debug("Applied confidence threshold filtering",
+				"originalReferences", len(references),
+				"filteredReferences", len(highConfidenceReferences),
+				"filteredOut", len(references)-len(highConfidenceReferences))
+
 			// Filter references based on scope
-			filteredReferences := te.components.ScopeFilter.FilterReferences(references, config.ScopeFilter)
+			filteredReferences := te.components.ScopeFilter.FilterReferences(highConfidenceReferences, config.ScopeFilter)
 
 			// Resolve references to actual resources
 			referencedResources, resolveErrors := te.components.ReferenceResolver.ResolveReferences(gCtx, resource, filteredReferences)
@@ -431,6 +451,34 @@ func (te *DefaultTraversalEngine) executeForwardTraversal(ctx context.Context, c
 		discoveryResult, err := te.DiscoverReferencedResources(ctx, currentResources, config)
 		if err != nil {
 			return functionerrors.Wrap(err, fmt.Sprintf("failed to discover references at depth %d", depth))
+		}
+
+		// Add comprehensive debug logging for discovery results
+		te.logger.Debug("Discovery results at depth",
+			"depth", depth,
+			"inputResources", len(currentResources),
+			"discoveredResources", len(discoveryResult.Resources),
+			"totalReferences", discoveryResult.Statistics.ReferencesDetected,
+			"discoveryTime", discoveryResult.Statistics.DiscoveryTime,
+			"errors", len(discoveryResult.Errors))
+
+		// Log details of discovered resources
+		for i, resource := range discoveryResult.Resources {
+			te.logger.Debug("Discovered resource",
+				"index", i,
+				"kind", resource.GetKind(),
+				"name", resource.GetName(),
+				"namespace", resource.GetNamespace(),
+				"apiVersion", resource.GetAPIVersion())
+		}
+
+		// Log resolution errors if any
+		for i, err := range discoveryResult.Errors {
+			te.logger.Debug("Discovery error",
+				"index", i,
+				"error", err.Message,
+				"resourceID", err.ResourceID,
+				"recoverable", err.Recoverable)
 		}
 
 		// Filter new resources (not already discovered)

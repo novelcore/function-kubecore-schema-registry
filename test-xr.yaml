@@ -1,0 +1,14 @@
+apiVersion: kubecore.io/v1alpha1
+kind: XSchemaRegistry
+metadata:
+  name: debug-test-claim
+  namespace: default
+spec:
+  parameters:
+    testMode: true
+    debugEnabled: true
+  compositionRef:
+    name: schema-registry-debug-test
+  writeConnectionSecretsToRef:
+    name: schema-registry-debug-connection
+    namespace: default

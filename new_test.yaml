@@ -1,0 +1,76 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: schema-registry-debug-test
+  labels:
+    provider: kubecore
+    service: schema-registry
+spec:
+  compositeTypeRef:
+    apiVersion: kubecore.io/v1alpha1
+    kind: XSchemaRegistry
+  mode: Pipeline
+  pipeline:
+  - step: schema-registry-discovery
+    functionRef:
+      name: function-kubecore-schema-registry
+    input:
+      apiVersion: registry.fn.crossplane.io/v1beta1
+      kind: Input
+      metadata:
+        name: debug-phase3-test
+      # Enable Phase 3 with comprehensive logging
+      phase3Features: true
+      traversalConfig:
+        enabled: true
+        maxDepth: 3
+        maxResources: 20
+        timeout: "15s"
+        direction: "forward"
+        scopeFilter:
+          platformOnly: true
+          includeAPIGroups:
+            - "github.platform.kubecore.io"
+        referenceResolution:
+          enableDynamicCRDs: true
+          followOwnerReferences: true
+          followCustomReferences: true
+          skipMissingReferences: true
+          minConfidenceThreshold: 0.5
+          # Test additional patterns to see if they work
+          additionalPatterns:
+            - pattern: "githubProviderRef"
+              targetKind: "GithubProvider"
+              targetGroup: "github.platform.kubecore.io"
+              confidence: 0.95
+        cycleHandling:
+          detectionEnabled: true
+          onCycleDetected: "continue"
+        performance:
+          maxConcurrentRequests: 5
+          requestTimeout: "10s"
+          enableMetrics: true
+          resourceDeduplication: true
+      # Fetch the GitHubProject as root - this has githubProviderRef
+      fetchResources:
+        - into: "testProject"
+          apiVersion: "github.platform.kubecore.io/v1alpha1"
+          kind: "GitHubProject"
+          name: "demo-project"
+          namespace: "test"
+          matchType: "direct"
+---
+apiVersion: kubecore.io/v1alpha1
+kind: XSchemaRegistry
+metadata:
+  name: debug-test-claim
+  namespace: default
+spec:
+  parameters:
+    testMode: true
+    debugEnabled: true
+  compositionRef:
+    name: schema-registry-debug-test
+  writeConnectionSecretsToRef:
+    name: schema-registry-debug-connection
+    namespace: default

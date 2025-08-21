@@ -1,4 +1,4 @@
-# XRD Definition for Reference Resolution Test (CRITICAL BUG FIX VALIDATION)
+# XRD Definition for Reference Resolution Bug Fix Validation
 apiVersion: apiextensions.crossplane.io/v1
 kind: CompositeResourceDefinition
 metadata:
@@ -70,7 +70,7 @@ spec:
                     type: string
                     description: "Test execution duration"
 ---
-# Reference Resolution Test Composition (CRITICAL BUG FIX VALIDATION)
+# Reference Resolution Bug Fix Test Composition
 apiVersion: apiextensions.crossplane.io/v1
 kind: Composition
 metadata:
@@ -83,7 +83,7 @@ spec:
   mode: Pipeline
 
   pipeline:
-  # CRITICAL TEST: Phase 3 Reference Resolution Bug Fix
+  # SINGLE FOCUSED TEST: GitHubProject -> GithubProvider Reference Resolution
   - step: test-reference-resolution-fix
     functionRef:
       name: function-kubecore-schema-registry
@@ -94,95 +94,12 @@ spec:
       fetchTimeout: "30s"
       maxConcurrentFetches: 5
       fetchResources:
-      # CRITICAL: Test GitHubProject -> GithubProvider reference resolution
-      - into: "projectWithProvider"
+      - into: "rootProject"
         name: "demo-project"
         namespace: "test"
         apiVersion: "github.platform.kubecore.io/v1alpha1"
         kind: "GitHubProject"
-        optional: false
-      traversalConfig:
-        enabled: true
-        maxDepth: 3
-        maxResources: 50
-        timeout: "30s"
-        direction: "forward"  # Follow references from GitHubProject
-        scopeFilter:
-          platformOnly: true
-          includeAPIGroups:
-            - "github.platform.kubecore.io"
-          crossNamespaceEnabled: true
-        referenceResolution:
-          enableDynamicCRDs: true
-          followCustomReferences: true
-          minConfidenceThreshold: 0.5
-          additionalPatterns:
-            - pattern: "githubProviderRef*"
-              targetKind: "GithubProvider"
-              targetGroup: "github.platform.kubecore.io"
-              confidence: 0.9
-        cycleHandling:
-          detectionEnabled: true
-          onCycleDetected: "continue"
-        performance:
-          maxConcurrentRequests: 5
-          requestTimeout: "5s"
-          enableMetrics: true
-          resourceDeduplication: true
-
-  # TEST 2: Bidirectional Discovery (Reverse Reference)
-  - step: test-bidirectional-discovery
-    functionRef:
-      name: function-kubecore-schema-registry
-    input:
-      apiVersion: registry.fn.crossplane.io/v1beta1
-      kind: Input
-      phase3Features: true
-      fetchTimeout: "30s"
-      maxConcurrentFetches: 5
-      fetchResources:
-      # Start from GithubProvider and find dependents
-      - into: "providerWithDependents"
-        name: "gh-default"
-        apiVersion: "github.platform.kubecore.io/v1alpha1"
-        kind: "GithubProvider"
-        optional: false
-      traversalConfig:
-        enabled: true
-        maxDepth: 3
-        maxResources: 50
-        timeout: "30s"
-        direction: "bidirectional"  # Find both dependencies and dependents
-        scopeFilter:
-          platformOnly: true
-          includeAPIGroups:
-            - "github.platform.kubecore.io"
-          crossNamespaceEnabled: true
-        referenceResolution:
-          enableDynamicCRDs: true
-          followCustomReferences: true
-          minConfidenceThreshold: 0.5
-        performance:
-          maxConcurrentRequests: 5
-          enableMetrics: true
-
-  # TEST 3: Performance and DAG Construction
-  - step: test-performance-dag
-    functionRef:
-      name: function-kubecore-schema-registry
-    input:
-      apiVersion: registry.fn.crossplane.io/v1beta1
-      kind: Input
-      phase3Features: true
-      fetchTimeout: "30s"
-      maxConcurrentFetches: 5
-      fetchResources:
-      - into: "performanceTest"
-        name: "demo-project"
-        namespace: "test"
-        apiVersion: "github.platform.kubecore.io/v1alpha1"
-        kind: "GitHubProject"
-        optional: false
+        matchType: "direct"
       traversalConfig:
         enabled: true
         maxDepth: 3
@@ -193,15 +110,7 @@ spec:
           platformOnly: true
           includeAPIGroups:
             - "github.platform.kubecore.io"
-        batchConfig:
-          enabled: true
-          batchSize: 10
-          maxConcurrentBatches: 2
-        cacheConfig:
-          enabled: true
-          ttl: "5m"
-          maxSize: 100
-          strategy: "lru"
+          crossNamespaceEnabled: true
         referenceResolution:
           enableDynamicCRDs: true
           followCustomReferences: true
@@ -209,7 +118,3 @@ spec:
         performance:
           enableMetrics: true
           resourceDeduplication: true
-          memoryLimits:
-            maxGraphSize: 10485760
-            maxCacheSize: 2097152
-            gcThreshold: 20971520

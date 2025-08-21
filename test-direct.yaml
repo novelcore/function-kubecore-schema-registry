@@ -1,0 +1,8 @@
+apiVersion: test.kubecore.platform.io/v1alpha1
+kind: XReferenceResolutionTest
+metadata:
+  name: reference-pattern-test
+spec:
+  testName: "pattern-matching-validation"
+  expectedResources: 2
+  maxDepth: 3

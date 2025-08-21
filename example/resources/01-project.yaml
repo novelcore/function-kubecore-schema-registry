@@ -34,10 +34,10 @@ spec:
     name: gh-default
   # alternative:
   # Dynamic Provider Resolution via Label Selector
-  githubProviderSelector:
-    matchLabels:
-      kubecore.io/organization: novelcore
-      kubecore.io/scmp-provider-type: github
+  # githubProviderSelector:
+  #   matchLabels:
+  #     kubecore.io/organization: novelcore
+  #     kubecore.io/scmp-provider-type: github
   # alternative, future direction
   # githubProviderSelector:
   #   matchLabels:

@@ -1,0 +1,54 @@
+# Function pipeline configuration for testing scope filtering fixes
+apiVersion: pkg.crossplane.io/v1beta1
+kind: Function
+metadata:
+  name: function-kubecore-schema-registry
+  annotations:
+    render.crossplane.io/runtime: Development
+spec:
+  package: kubecore/function-kubecore-schema-registry:latest
+
+---
+# Function Input Configuration
+apiVersion: registry.fn.crossplane.io/v1beta1
+kind: Input
+metadata:
+  name: scope-filtering-test
+phase3Features: true
+fetchTimeout: "30s"
+maxConcurrentFetches: 5
+
+# Fetch the root GitHubProject resource
+fetchResources:
+- into: "rootGitHubProject"
+  name: "demo-project"
+  namespace: "test"  
+  apiVersion: "github.platform.kubecore.io/v1alpha1"
+  kind: "GitHubProject"
+  matchType: "direct"
+
+# Phase 3 transitive discovery configuration
+traversalConfig:
+  enabled: true
+  maxDepth: 3
+  maxResources: 50
+  timeout: "30s"
+  direction: "forward"
+  
+  scopeFilter:
+    platformOnly: true
+    includeAPIGroups:
+      - "github.platform.kubecore.io"
+    crossNamespaceEnabled: true
+  
+  referenceResolution:
+    enableDynamicCRDs: true
+    followCustomReferences: true
+    # This is where Fix 1 applies - confidence threshold filtering  
+    minConfidenceThreshold: 0.7  # Should filter out low-confidence noise
+    skipMissingReferences: true
+  
+  performance:
+    enableMetrics: true
+    resourceDeduplication: true
+    maxConcurrentRequests: 10

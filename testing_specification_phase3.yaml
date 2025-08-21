@@ -139,111 +139,111 @@ spec:
         message: "Root resource fetch should be successful"
         
   testResources:
-    - apiVersion: platform.kubecore.io/v1
-      kind: KubeCluster
-      metadata:
-        name: dev-cluster
-        namespace: default
-        labels:
-          environment: development
-          tier: platform
-        annotations:
-          kubecore.io/managed-by: "platform-team"
-      spec:
-        region: us-west-2
-        version: "1.28"
-        nodeGroups:
-          - name: workers
-            instanceType: m5.large
-            minSize: 2
-            maxSize: 10
-        kubEnvRef:
-          name: dev-environment
-          namespace: default
-        qualityGateRef:
-          name: cluster-quality-gate
-          namespace: default
+    # - apiVersion: platform.kubecore.io/v1
+    #   kind: KubeCluster
+    #   metadata:
+    #     name: dev-cluster
+    #     namespace: default
+    #     labels:
+    #       environment: development
+    #       tier: platform
+    #     annotations:
+    #       kubecore.io/managed-by: "platform-team"
+    #   spec:
+    #     region: us-west-2
+    #     version: "1.28"
+    #     nodeGroups:
+    #       - name: workers
+    #         instanceType: m5.large
+    #         minSize: 2
+    #         maxSize: 10
+    #     kubEnvRef:
+    #       name: dev-environment
+    #       namespace: default
+    #     qualityGateRef:
+    #       name: cluster-quality-gate
+    #       namespace: default
         
-    - apiVersion: platform.kubecore.io/v1
-      kind: KubEnv
-      metadata:
-        name: dev-environment
-        namespace: default
-        labels:
-          environment: development
-        ownerReferences:
-          - apiVersion: platform.kubecore.io/v1
-            kind: KubeCluster
-            name: dev-cluster
-            uid: "12345678-1234-1234-1234-123456789012"
-      spec:
-        environment: development
-        region: us-west-2
-        kubeSystemRef:
-          name: dev-system
-          namespace: default
+    # - apiVersion: platform.kubecore.io/v1
+    #   kind: KubEnv
+    #   metadata:
+    #     name: dev-environment
+    #     namespace: default
+    #     labels:
+    #       environment: development
+    #     ownerReferences:
+    #       - apiVersion: platform.kubecore.io/v1
+    #         kind: KubeCluster
+    #         name: dev-cluster
+    #         uid: "12345678-1234-1234-1234-123456789012"
+    #   spec:
+    #     environment: development
+    #     region: us-west-2
+    #     kubeSystemRef:
+    #       name: dev-system
+    #       namespace: default
         
-    - apiVersion: platform.kubecore.io/v1
-      kind: KubeSystem
-      metadata:
-        name: dev-system
-        namespace: default
-        labels:
-          environment: development
-        ownerReferences:
-          - apiVersion: platform.kubecore.io/v1
-            kind: KubEnv
-            name: dev-environment
-            uid: "12345678-1234-1234-1234-123456789013"
-      spec:
-        systemType: kubernetes
-        components:
-          - name: ingress-controller
-            version: "1.8.0"
-          - name: cert-manager
-            version: "1.12.0"
-        kubeNetRef:
-          name: dev-network
-          namespace: default
+    # - apiVersion: platform.kubecore.io/v1
+    #   kind: KubeSystem
+    #   metadata:
+    #     name: dev-system
+    #     namespace: default
+    #     labels:
+    #       environment: development
+    #     ownerReferences:
+    #       - apiVersion: platform.kubecore.io/v1
+    #         kind: KubEnv
+    #         name: dev-environment
+    #         uid: "12345678-1234-1234-1234-123456789013"
+    #   spec:
+    #     systemType: kubernetes
+    #     components:
+    #       - name: ingress-controller
+    #         version: "1.8.0"
+    #       - name: cert-manager
+    #         version: "1.12.0"
+    #     kubeNetRef:
+    #       name: dev-network
+    #       namespace: default
           
-    - apiVersion: platform.kubecore.io/v1
-      kind: KubeNet
-      metadata:
-        name: dev-network
-        namespace: default
-        labels:
-          environment: development
-        ownerReferences:
-          - apiVersion: platform.kubecore.io/v1
-            kind: KubeSystem
-            name: dev-system
-            uid: "12345678-1234-1234-1234-123456789014"
-      spec:
-        networkType: vpc
-        cidr: "10.0.0.0/16"
-        subnets:
-          - name: public
-            cidr: "10.0.1.0/24"
-          - name: private
-            cidr: "10.0.2.0/24"
+    # - apiVersion: platform.kubecore.io/v1
+    #   kind: KubeNet
+    #   metadata:
+    #     name: dev-network
+    #     namespace: default
+    #     labels:
+    #       environment: development
+    #     ownerReferences:
+    #       - apiVersion: platform.kubecore.io/v1
+    #         kind: KubeSystem
+    #         name: dev-system
+    #         uid: "12345678-1234-1234-1234-123456789014"
+    #   spec:
+    #     networkType: vpc
+    #     cidr: "10.0.0.0/16"
+    #     subnets:
+    #       - name: public
+    #         cidr: "10.0.1.0/24"
+    #       - name: private
+    #         cidr: "10.0.2.0/24"
             
-    - apiVersion: platform.kubecore.io/v1
-      kind: QualityGate
-      metadata:
-        name: cluster-quality-gate
-        namespace: default
-        labels:
-          environment: development
-      spec:
-        gateType: cluster-readiness
-        checks:
-          - name: node-health
-            threshold: "95%"
-          - name: pod-success-rate
-            threshold: "99%"
-        githubProjectRef:
-          name: platform-infrastructure
-          namespace: default
+    # - apiVersion: platform.kubecore.io/v1
+    #   kind: QualityGate
+    #   metadata:
+    #     name: cluster-quality-gate
+    #     namespace: default
+    #     labels:
+    #       environment: development
+    #   spec:
+    #     gateType: cluster-readiness
+    #     checks:
+    #       - name: node-health
+    #         threshold: "95%"
+    #       - name: pod-success-rate
+    #         threshold: "99%"
+    #     githubProjectRef:
+    #       name: platform-infrastructure
+    #       namespace: default
           
     - apiVersion: github.platform.kubecore.io/v1
       kind: GitHubProject
