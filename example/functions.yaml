@@ -4,11 +4,111 @@ kind: Function
 metadata:
   name: function-kubecore-schema-registry
   annotations:
-    # This tells crossplane beta render to connect to the function locally.
+    # For local development - connect to function locally
     render.crossplane.io/runtime: Development
 spec:
-  # This is ignored when using the Development runtime.
-  package: function-kubecore-schema-registry
+  # Production package reference (update with actual registry and version)
+  package: ghcr.io/novelcore/function-kubecore-schema-registry:v0.0.0-20250821061334-63685c3c92f3
+---
+# Production Deployment Runtime Configuration
+apiVersion: pkg.crossplane.io/v1beta1
+kind: DeploymentRuntimeConfig
+metadata:
+  name: kubecore-schema-registry-config
+spec:
+  deploymentTemplate:
+    spec:
+      selector: {}
+      template:
+        spec:
+          containers:
+          - name: package-runtime
+            env:
+            # Dynamic Resource Discovery Configuration
+            - name: REGISTRY_MODE
+              value: "hybrid"                    # hybrid|dynamic|embedded
+            - name: API_GROUP_PATTERNS
+              value: "*.kubecore.io,platform.kubecore.io,github.platform.kubecore.io,app.kubecore.io"
+            - name: DISCOVERY_TIMEOUT
+              value: "5s"                       # Max time for CRD discovery
+            - name: FALLBACK_ENABLED
+              value: "true"                     # Enable embedded registry fallback
+            - name: CACHE_ENABLED
+              value: "true"                     # Enable discovery result caching
+            - name: CACHE_TTL
+              value: "10m"                      # Cache time-to-live
+            - name: LOG_LEVEL
+              value: "info"                     # info|debug|warn|error
+            - name: REF_PATTERNS
+              value: "*Ref,*Reference,kubeClusterRef*,kubEnvRef*,githubProviderRef*"
+            # Performance Configuration
+            - name: MAX_CONCURRENT_FETCHES
+              value: "10"
+            - name: FETCH_TIMEOUT
+              value: "30s"
+            # Security and Resource Configuration
+            resources:
+              limits:
+                cpu: 500m
+                memory: 512Mi
+              requests:
+                cpu: 100m
+                memory: 128Mi
+            securityContext:
+              runAsNonRoot: true
+              runAsUser: 2000
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop:
+                - ALL
+              readOnlyRootFilesystem: true
+---
+# Alternative Development Configuration
+apiVersion: pkg.crossplane.io/v1beta1
+kind: DeploymentRuntimeConfig  
+metadata:
+  name: kubecore-schema-registry-dev
+spec:
+  deploymentTemplate:
+    spec:
+      selector: {}
+      template:
+        spec:
+          containers:
+          - name: package-runtime
+            env:
+            # Development Configuration - Enhanced Logging
+            - name: REGISTRY_MODE
+              value: "dynamic"                  # Test dynamic mode in development
+            - name: API_GROUP_PATTERNS
+              value: "*.kubecore.io,test.platform.io,dev.kubecore.io"
+            - name: DISCOVERY_TIMEOUT
+              value: "30s"                      # Longer timeout for development
+            - name: LOG_LEVEL
+              value: "debug"                    # Verbose logging for development
+            - name: CACHE_TTL
+              value: "1m"                       # Shorter cache for testing
+            # Development Resources
+            resources:
+              limits:
+                cpu: 1000m
+                memory: 1Gi
+              requests:
+                cpu: 200m
+                memory: 256Mi
+---
+# Production Function Reference with Runtime Config
+apiVersion: pkg.crossplane.io/v1beta1
+kind: Function
+metadata:
+  name: function-kubecore-schema-registry-prod
+  annotations:
+    meta.crossplane.io/description: "KubeCore Schema Registry Function with Dynamic CRD Discovery"
+    meta.crossplane.io/version: "v1.2.0"
+spec:
+  package: ghcr.io/novelcore/function-kubecore-schema-registry:v0.0.0-20250821061334-63685c3c92f3
+  runtimeConfigRef:
+    name: kubecore-schema-registry-config
 ---
 # Phase 1 Input Configuration
 apiVersion: registry.fn.crossplane.io/v1beta1
