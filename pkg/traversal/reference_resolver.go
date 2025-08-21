@@ -285,8 +285,13 @@ func (rr *DefaultReferenceResolver) extractReferencesFromPatterns(resource *unst
 				"fieldName", ref.FieldName,
 				"fieldPath", ref.FieldPath,
 				"targetKind", ref.TargetKind,
-				"confidence", ref.Confidence)
+				"targetGroup", ref.TargetGroup,
+				"refType", ref.RefType,
+				"confidence", ref.Confidence,
+				"detectionMethod", ref.DetectionMethod)
 		}
+	} else {
+		rr.logger.Debug("Pattern-based reference detection failed", "error", err)
 	}
 
 	return references, err
@@ -370,19 +375,52 @@ func (rr *DefaultReferenceResolver) convertToResourceSchema(resource *unstructur
 }
 
 // analyzeFields recursively analyzes fields to build field definitions
-func (rr *DefaultReferenceResolver) analyzeFields(obj map[string]interface{}, basePath string, fields map[string]*dynamictypes.FieldDefinition) {
-	for key, value := range obj {
-		fieldPath := fmt.Sprintf("%s.%s", basePath, key)
+func (rr *DefaultReferenceResolver) analyzeFields(obj interface{}, basePath string, fields map[string]*dynamictypes.FieldDefinition) {
+	// Handle different map types that can result from YAML parsing
+	var mapObj map[string]interface{}
+	
+	switch v := obj.(type) {
+	case map[string]interface{}:
+		mapObj = v
+	case map[interface{}]interface{}:
+		// Convert map[interface{}]interface{} to map[string]interface{}
+		mapObj = make(map[string]interface{})
+		for k, val := range v {
+			if keyStr, ok := k.(string); ok {
+				mapObj[keyStr] = val
+			} else {
+				rr.logger.Debug("Skipping non-string map key", "key", k, "type", fmt.Sprintf("%T", k))
+			}
+		}
+	default:
+		rr.logger.Debug("Unexpected object type in analyzeFields", "type", fmt.Sprintf("%T", obj))
+		return
+	}
+	
+	for key, value := range mapObj {
+		// Fix leading dot issue when basePath is empty
+		var fieldPath string
+		if basePath == "" {
+			fieldPath = key
+		} else {
+			fieldPath = fmt.Sprintf("%s.%s", basePath, key)
+		}
 
 		fieldDef := &dynamictypes.FieldDefinition{
 			Type: rr.determineFieldType(value),
 		}
 
-		// Recursively analyze nested objects
-		if nestedMap, ok := value.(map[string]interface{}); ok {
+		// Recursively analyze nested objects - handle both map types
+		if rr.isMapType(value) {
 			properties := make(map[string]*dynamictypes.FieldDefinition)
-			rr.analyzeNestedFields(nestedMap, properties)
+			// Recursive call with proper nested object handling
+			rr.analyzeFields(value, fieldPath, properties)
 			fieldDef.Properties = properties
+			
+			rr.logger.Debug("Nested object analyzed", 
+				"fieldName", key,
+				"fieldPath", fieldPath, 
+				"propertiesCount", len(properties))
 		}
 
 		// CRITICAL FIX: Use field name as key for pattern matching, not full path
@@ -390,22 +428,16 @@ func (rr *DefaultReferenceResolver) analyzeFields(obj map[string]interface{}, ba
 		// instead of failing to match "spec.githubProviderRef"
 		fields[key] = fieldDef
 		
-		// Add debug logging to validate fix
+		// Add comprehensive debug logging to trace field analysis
 		rr.logger.Debug("Field analyzed", 
 			"fieldName", key, 
 			"fieldPath", fieldPath, 
-			"fieldType", fieldDef.Type)
+			"fieldType", fieldDef.Type,
+			"hasProperties", fieldDef.Properties != nil,
+			"propertiesCount", len(fieldDef.Properties))
 	}
 }
 
-// analyzeNestedFields analyzes nested fields
-func (rr *DefaultReferenceResolver) analyzeNestedFields(obj map[string]interface{}, properties map[string]*dynamictypes.FieldDefinition) {
-	for key, value := range obj {
-		properties[key] = &dynamictypes.FieldDefinition{
-			Type: rr.determineFieldType(value),
-		}
-	}
-}
 
 // determineFieldType determines the type of a field value
 func (rr *DefaultReferenceResolver) determineFieldType(value interface{}) string {
@@ -420,10 +452,20 @@ func (rr *DefaultReferenceResolver) determineFieldType(value interface{}) string
 		return "boolean"
 	case []interface{}:
 		return "array"
-	case map[string]interface{}:
+	case map[string]interface{}, map[interface{}]interface{}:
 		return "object"
 	default:
 		return "string"
+	}
+}
+
+// isMapType checks if a value is a map type (handles both YAML parsing variants)
+func (rr *DefaultReferenceResolver) isMapType(value interface{}) bool {
+	switch value.(type) {
+	case map[string]interface{}, map[interface{}]interface{}:
+		return true
+	default:
+		return false
 	}
 }
 

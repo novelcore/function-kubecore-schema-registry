@@ -129,7 +129,19 @@ func (d *PatternBasedDetector) analyzeFieldForReference(fieldName string, fieldD
 // detectByPattern detects references using configured patterns
 func (d *PatternBasedDetector) detectByPattern(fieldName string, fieldDef *FieldDefinition, fieldPath string) *ReferenceField {
 	for _, pattern := range d.patterns {
-		if d.matchesPattern(fieldName, pattern.Pattern) && d.isCompatibleType(fieldDef, pattern) {
+		matchesName := d.matchesPattern(fieldName, pattern.Pattern)
+		compatibleType := d.isCompatibleType(fieldDef, pattern)
+		
+		d.logger.Debug("Pattern matching attempt", 
+			"fieldName", fieldName, 
+			"fieldPath", fieldPath,
+			"pattern", pattern.Pattern,
+			"matchesName", matchesName,
+			"compatibleType", compatibleType,
+			"fieldType", fieldDef.Type,
+			"hasProperties", fieldDef.Properties != nil)
+		
+		if matchesName && compatibleType {
 			// Construct proper field path: if we have a simple field name, 
 			// assume it's within spec unless already fully qualified
 			finalFieldPath := fieldPath
@@ -139,10 +151,19 @@ func (d *PatternBasedDetector) detectByPattern(fieldName string, fieldDef *Field
 				finalFieldPath = "spec." + fieldName
 			}
 			
+			targetKind := d.inferTargetKind(fieldName, pattern)
+			
+			d.logger.Debug("Pattern match found!", 
+				"fieldName", fieldName, 
+				"pattern", pattern.Pattern,
+				"targetKind", targetKind,
+				"targetGroup", pattern.TargetGroup,
+				"finalFieldPath", finalFieldPath)
+			
 			return &ReferenceField{
 				FieldPath:       finalFieldPath,
 				FieldName:       fieldName,
-				TargetKind:      d.inferTargetKind(fieldName, pattern),
+				TargetKind:      targetKind,
 				TargetGroup:     pattern.TargetGroup,
 				RefType:         pattern.RefType,
 				Confidence:      pattern.Confidence,
@@ -360,14 +381,19 @@ func (d *PatternBasedDetector) looksLikeReference(fieldName string) bool {
 // hasReferenceStructure checks if field has a structure typical of references
 func (d *PatternBasedDetector) hasReferenceStructure(fieldDef *FieldDefinition) bool {
 	if fieldDef.Type != "object" || fieldDef.Properties == nil {
+		d.logger.Debug("Reference structure check failed", 
+			"type", fieldDef.Type, 
+			"hasProperties", fieldDef.Properties != nil)
 		return false
 	}
 
 	// Look for common reference field combinations
 	hasName := false
 	hasKind := false
-
+	
+	propertyNames := make([]string, 0, len(fieldDef.Properties))
 	for propName := range fieldDef.Properties {
+		propertyNames = append(propertyNames, propName)
 		propLower := strings.ToLower(propName)
 		switch propLower {
 		case "name":
@@ -377,9 +403,17 @@ func (d *PatternBasedDetector) hasReferenceStructure(fieldDef *FieldDefinition) 
 		}
 	}
 
+	result := hasName || (hasKind && hasName)
+	
+	d.logger.Debug("Reference structure analysis", 
+		"propertyNames", propertyNames,
+		"hasName", hasName,
+		"hasKind", hasKind,
+		"isReferenceStructure", result)
+
 	// Reference structures typically have at least a name
 	// Optionally kind for typed references
-	return hasName || (hasKind && hasName)
+	return result
 }
 
 // MatchesReferencePattern checks if a field matches any reference pattern
