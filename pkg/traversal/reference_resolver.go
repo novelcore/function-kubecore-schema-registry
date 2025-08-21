@@ -258,13 +258,38 @@ func (rr *DefaultReferenceResolver) extractReferencesFromRegistry(resource *unst
 
 // extractReferencesFromPatterns extracts references using pattern matching
 func (rr *DefaultReferenceResolver) extractReferencesFromPatterns(resource *unstructured.Unstructured) ([]dynamictypes.ReferenceField, error) {
+	// Debug logging for schema conversion
+	rr.logger.Debug("Converting resource to schema",
+		"kind", resource.GetKind(),
+		"name", resource.GetName())
+
 	// Use the reference detector to find references based on patterns
 	resourceSchema := rr.convertToResourceSchema(resource)
 	if resourceSchema == nil {
+		rr.logger.Debug("No schema generated for resource")
 		return []dynamictypes.ReferenceField{}, nil
 	}
 
-	return rr.referenceDetector.DetectReferences(resourceSchema)
+	// Log schema fields for debugging
+	fieldNames := rr.getFieldNames(resourceSchema.Fields)
+	rr.logger.Debug("Schema fields analyzed",
+		"fieldCount", len(resourceSchema.Fields),
+		"fieldNames", fieldNames)
+
+	references, err := rr.referenceDetector.DetectReferences(resourceSchema)
+	if err == nil {
+		rr.logger.Debug("Pattern-based references detected",
+			"referenceCount", len(references))
+		for _, ref := range references {
+			rr.logger.Debug("Reference found",
+				"fieldName", ref.FieldName,
+				"fieldPath", ref.FieldPath,
+				"targetKind", ref.TargetKind,
+				"confidence", ref.Confidence)
+		}
+	}
+
+	return references, err
 }
 
 // extractOwnerReferences extracts owner references
@@ -301,27 +326,45 @@ func (rr *DefaultReferenceResolver) extractOwnerReferences(resource *unstructure
 
 // convertToResourceSchema converts an unstructured resource to a ResourceSchema
 func (rr *DefaultReferenceResolver) convertToResourceSchema(resource *unstructured.Unstructured) *dynamictypes.ResourceSchema {
-	// This is a simplified conversion
-	// In a full implementation, this would:
-	// 1. Extract the spec/status fields
-	// 2. Analyze their structure
-	// 3. Build field definitions with types
-	// 4. Return a proper ResourceSchema
+	rootFields := make(map[string]*dynamictypes.FieldDefinition)
 
-	fields := make(map[string]*dynamictypes.FieldDefinition)
-
-	// Analyze spec fields
+	// Process spec as a structured field
 	if spec, found, _ := unstructured.NestedMap(resource.Object, "spec"); found {
-		rr.analyzeFields(spec, "spec", fields)
+		specField := &dynamictypes.FieldDefinition{
+			Type:       "object",
+			Properties: make(map[string]*dynamictypes.FieldDefinition),
+		}
+		// Use empty basePath so field names are preserved for pattern matching
+		rr.analyzeFields(spec, "", specField.Properties)
+		rootFields["spec"] = specField
+		
+		// Also add spec fields directly to root for pattern matching
+		// This allows patterns to match both "githubProviderRef" and "spec.githubProviderRef"
+		for fieldName, fieldDef := range specField.Properties {
+			rootFields[fieldName] = fieldDef
+		}
 	}
 
-	// Analyze status fields
+	// Process status as a structured field
 	if status, found, _ := unstructured.NestedMap(resource.Object, "status"); found {
-		rr.analyzeFields(status, "status", fields)
+		statusField := &dynamictypes.FieldDefinition{
+			Type:       "object",
+			Properties: make(map[string]*dynamictypes.FieldDefinition),
+		}
+		// Use empty basePath so field names are preserved for pattern matching
+		rr.analyzeFields(status, "", statusField.Properties)
+		rootFields["status"] = statusField
+		
+		// Also add status fields directly to root for pattern matching
+		for fieldName, fieldDef := range statusField.Properties {
+			if _, exists := rootFields[fieldName]; !exists { // Avoid overriding spec fields
+				rootFields[fieldName] = fieldDef
+			}
+		}
 	}
 
 	return &dynamictypes.ResourceSchema{
-		Fields:      fields,
+		Fields:      rootFields,
 		Description: fmt.Sprintf("Schema for %s", resource.GetKind()),
 	}
 }
@@ -342,7 +385,16 @@ func (rr *DefaultReferenceResolver) analyzeFields(obj map[string]interface{}, ba
 			fieldDef.Properties = properties
 		}
 
-		fields[fieldPath] = fieldDef
+		// CRITICAL FIX: Use field name as key for pattern matching, not full path
+		// This allows patterns like "githubProviderRef*" to match field "githubProviderRef"
+		// instead of failing to match "spec.githubProviderRef"
+		fields[key] = fieldDef
+		
+		// Add debug logging to validate fix
+		rr.logger.Debug("Field analyzed", 
+			"fieldName", key, 
+			"fieldPath", fieldPath, 
+			"fieldType", fieldDef.Type)
 	}
 }
 
@@ -532,4 +584,13 @@ func (rr *DefaultReferenceResolver) generateCacheKey(source *unstructured.Unstru
 		reference.FieldPath,
 		reference.TargetKind,
 		reference.TargetGroup)
+}
+
+// getFieldNames returns a slice of field names for debugging
+func (rr *DefaultReferenceResolver) getFieldNames(fields map[string]*dynamictypes.FieldDefinition) []string {
+	var names []string
+	for name := range fields {
+		names = append(names, name)
+	}
+	return names
 }

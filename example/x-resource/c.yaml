@@ -1,16 +1,16 @@
-# XRD Definition for Schema Registry Phase 3 Test
+# XRD Definition for Reference Resolution Test (CRITICAL BUG FIX VALIDATION)
 apiVersion: apiextensions.crossplane.io/v1
 kind: CompositeResourceDefinition
 metadata:
-  name: xschemaregistryphase3tests.test.kubecore.platform.io
+  name: xreferenceresolutiontests.test.kubecore.platform.io
 spec:
   group: test.kubecore.platform.io
   names:
-    kind: XSchemaRegistryPhase3Test
-    plural: xschemaregistryphase3tests
+    kind: XReferenceResolutionTest
+    plural: xreferenceresolutiontests
   claimNames:
-    kind: SchemaRegistryPhase3Test
-    plural: schemaregistryphase3tests
+    kind: ReferenceResolutionTest
+    plural: referenceresolutiontests
   versions:
   - name: v1alpha1
     served: true
@@ -24,37 +24,17 @@ spec:
             properties:
               testName:
                 type: string
-                description: "Name identifier for this test run"
-              description:
-                type: string
-                description: "Description of what this test validates"
-              phase3Enabled:
-                type: boolean
-                description: "Whether to test Phase 3 features"
-                default: true
-              testScenario:
-                type: string
-                description: "Test scenario to execute"
-                enum: ["complete-topology", "security-boundary", "cycle-detection", "performance-optimization", "reference-resolution", "memory-management", "input-validation"]
-              rootResource:
-                type: object
-                description: "Root resource configuration for transitive discovery"
-                properties:
-                  name:
-                    type: string
-                  namespace:
-                    type: string
-                  apiVersion:
-                    type: string
-                  kind:
-                    type: string
-                required:
-                - name
-                - apiVersion
-                - kind
+                description: "Name of the reference resolution test"
+              expectedResources:
+                type: integer
+                description: "Expected number of resources to discover"
+                default: 2
+              maxDepth:
+                type: integer
+                description: "Maximum traversal depth"
+                default: 3
             required:
             - testName
-            - testScenario
           status:
             type: object
             properties:
@@ -71,64 +51,40 @@ spec:
                     type: integer
                   executionTime:
                     type: string
-              phase3Results:
+              referenceResolutionResults:
                 type: object
                 properties:
-                  traversalStats:
-                    type: object
-                    properties:
-                      totalDiscovered:
-                        type: integer
-                      maxDepthReached:
-                        type: integer
-                      cyclesDetected:
-                        type: integer
-                      platformResourcesOnly:
-                        type: boolean
-                      batchesProcessed:
-                        type: integer
-                      cacheHitRate:
-                        type: number
-                      memoryUsageBytes:
-                        type: integer
-                      executionTimeMs:
-                        type: integer
-                  graphMetadata:
-                    type: object
-                    properties:
-                      nodeCount:
-                        type: integer
-                      edgeCount:
-                        type: integer
-                      stronglyConnectedComponents:
-                        type: integer
-                  securityValidation:
-                    type: object
-                    properties:
-                      platformBoundaryRespected:
-                        type: boolean
-                      excludedResourcesCount:
-                        type: integer
-                      allowedAPIGroups:
-                        type: array
-                        items:
-                          type: string
+                  discoveredResources:
+                    type: integer
+                    description: "Total resources discovered"
+                  maxDepthReached:
+                    type: integer
+                    description: "Maximum depth reached"
+                  referencesResolved:
+                    type: integer
+                    description: "Number of references successfully resolved"
+                  testStatus:
+                    type: string
+                    enum: ["PASS", "FAIL", "PARTIAL"]
+                  executionTime:
+                    type: string
+                    description: "Test execution duration"
 ---
-# Phase 3 Test Composition
+# Reference Resolution Test Composition (CRITICAL BUG FIX VALIDATION)
 apiVersion: apiextensions.crossplane.io/v1
 kind: Composition
 metadata:
-  name: xschemaregistryphase3test.test.kubecore.platform.io
+  name: xreferenceresolutiontest.test.kubecore.platform.io
 spec:
   compositeTypeRef:
     apiVersion: test.kubecore.platform.io/v1alpha1
-    kind: XSchemaRegistryPhase3Test
+    kind: XReferenceResolutionTest
 
   mode: Pipeline
 
   pipeline:
-  # Step 1: Phase 3 Transitive Discovery - Complete Application Topology
-  - step: phase3-transitive-discovery
+  # CRITICAL TEST: Phase 3 Reference Resolution Bug Fix
+  - step: test-reference-resolution-fix
     functionRef:
       name: function-kubecore-schema-registry
     input:
@@ -136,219 +92,124 @@ spec:
       kind: Input
       phase3Features: true
       fetchTimeout: "30s"
-      maxConcurrentFetches: 10
-      fetchResources:
-      # Root resource for transitive discovery
-      - into: rootAppResource
-        name: art-api
-        namespace: default
-        apiVersion: app.kubecore.io/v1alpha1
-        kind: App
-        optional: false
-      traversalConfig:
-        enabled: true
-        maxDepth: -1                        # Unlimited depth
-        maxResources: 100                   # Safety limit
-        timeout: "30s"
-        direction: "bidirectional"          # Find dependencies and dependents
-        scopeFilter:
-          platformOnly: true                # CRITICAL: Only platform resources
-          includeAPIGroups:
-            - "*.kubecore.io"
-            - "platform.kubecore.io"
-            - "github.platform.kubecore.io"
-            - "app.kubecore.io"
-          excludeKinds:                     # Infrastructure resources excluded
-            - "Secret"
-            - "ConfigMap"
-            - "ServiceAccount"
-            - "ClusterSecretStore"
-            - "PersistentVolumeClaim"
-          crossNamespaceEnabled: true
-        batchConfig:
-          enabled: true
-          batchSize: 10
-          maxConcurrentBatches: 3
-          sameDepthBatching: true
-          batchTimeout: "5s"
-        cacheConfig:
-          enabled: true
-          ttl: "5m"
-          maxSize: 1000
-          strategy: "lru"
-        referenceResolution:
-          enableDynamicCRDs: true
-          followOwnerReferences: true
-          followCustomReferences: true
-          skipMissingReferences: true
-          minConfidenceThreshold: 0.5
-          additionalPatterns:
-            - pattern: "*ClusterRef"
-              targetKind: "KubeCluster"
-              targetGroup: "platform.kubecore.io"
-              confidence: 0.9
-            - pattern: "*EnvRef"
-              targetKind: "KubEnv"
-              targetGroup: "platform.kubecore.io"
-              confidence: 0.9
-        cycleHandling:
-          detectionEnabled: true
-          onCycleDetected: "continue"       # Continue traversal on cycle
-          maxCycles: 10
-          reportCycles: true
-        performance:
-          maxConcurrentRequests: 10
-          requestTimeout: "2s"
-          enableMetrics: true
-          resourceDeduplication: true
-          memoryLimits:
-            maxGraphSize: 52428800          # 50MB graph limit
-            maxCacheSize: 10485760          # 10MB cache limit
-            gcThreshold: 83886080           # 80MB GC threshold
-
-  # Step 2: Phase 3 Platform Security Boundary Test
-  - step: phase3-security-boundary
-    functionRef:
-      name: function-kubecore-schema-registry
-    input:
-      apiVersion: registry.fn.crossplane.io/v1beta1
-      kind: Input
-      phase3Features: true
-      fetchTimeout: "20s"
       maxConcurrentFetches: 5
       fetchResources:
-      # Test platform boundary enforcement starting from KubeCluster
-      - into: securityTestRoot
-        name: demo-cluster
-        namespace: test
-        apiVersion: platform.kubecore.io/v1alpha1
-        kind: KubeCluster
+      # CRITICAL: Test GitHubProject -> GithubProvider reference resolution
+      - into: "projectWithProvider"
+        name: "demo-project"
+        namespace: "test"
+        apiVersion: "github.platform.kubecore.io/v1alpha1"
+        kind: "GitHubProject"
         optional: false
       traversalConfig:
         enabled: true
         maxDepth: 3
         maxResources: 50
-        timeout: "20s"
-        direction: "forward"
-        scopeFilter:
-          platformOnly: true                # STRICT: Only platform resources
-          includeAPIGroups:
-            - "platform.kubecore.io"        # Only core platform
-          excludeKinds:                     # All infrastructure excluded
-            - "Secret"
-            - "ConfigMap"
-            - "ServiceAccount"
-            - "ClusterSecretStore"
-            - "PersistentVolumeClaim"
-            - "PersistentVolume"
-            - "Pod"
-            - "Service"
-            - "Deployment"
-          crossNamespaceEnabled: false      # Stay within namespace
-        referenceResolution:
-          followOwnerReferences: false      # Don't follow k8s owner refs
-          followCustomReferences: true      # Only platform custom refs
-          minConfidenceThreshold: 0.8       # High confidence
-        cycleHandling:
-          detectionEnabled: true
-          onCycleDetected: "fail"           # Fail on cycles in platform
-        performance:
-          maxConcurrentRequests: 5          # Conservative
-          enableMetrics: true
-
-  # Step 3: Phase 3 Cycle Detection Test
-  - step: phase3-cycle-detection
-    functionRef:
-      name: function-kubecore-schema-registry
-    input:
-      apiVersion: registry.fn.crossplane.io/v1beta1
-      kind: Input
-      phase3Features: true
-      fetchTimeout: "15s"
-      maxConcurrentFetches: 3
-      fetchResources:
-      # Test cycle detection in resource chain
-      - into: cycleTestRoot
-        name: demo-kubesystem
-        namespace: test
-        apiVersion: platform.kubecore.io/v1alpha1
-        kind: KubeSystem
-        optional: false
-      traversalConfig:
-        enabled: true
-        maxDepth: 5
-        maxResources: 30
-        timeout: "15s"
-        direction: "bidirectional"          # Both directions for cycles
+        timeout: "30s"
+        direction: "forward"  # Follow references from GitHubProject
         scopeFilter:
           platformOnly: true
           includeAPIGroups:
-            - "platform.kubecore.io"
+            - "github.platform.kubecore.io"
           crossNamespaceEnabled: true
-        cycleHandling:
-          detectionEnabled: true             # ENABLE cycle detection
-          onCycleDetected: "continue"        # Continue on cycle
-          maxCycles: 5
-          reportCycles: true                 # Report cycle details
         referenceResolution:
-          followOwnerReferences: true
+          enableDynamicCRDs: true
           followCustomReferences: true
-          minConfidenceThreshold: 0.6
+          minConfidenceThreshold: 0.5
+          additionalPatterns:
+            - pattern: "githubProviderRef*"
+              targetKind: "GithubProvider"
+              targetGroup: "github.platform.kubecore.io"
+              confidence: 0.9
+        cycleHandling:
+          detectionEnabled: true
+          onCycleDetected: "continue"
         performance:
+          maxConcurrentRequests: 5
+          requestTimeout: "5s"
           enableMetrics: true
           resourceDeduplication: true
 
-  # Step 4: Phase 3 Performance Optimization Test
-  - step: phase3-performance-optimization
+  # TEST 2: Bidirectional Discovery (Reverse Reference)
+  - step: test-bidirectional-discovery
     functionRef:
       name: function-kubecore-schema-registry
     input:
       apiVersion: registry.fn.crossplane.io/v1beta1
       kind: Input
       phase3Features: true
-      fetchTimeout: "25s"
-      maxConcurrentFetches: 8
+      fetchTimeout: "30s"
+      maxConcurrentFetches: 5
       fetchResources:
-      # Test performance with multiple root resources
-      - into: performanceTestRoot
-        name: demo-dev
-        namespace: test
-        apiVersion: platform.kubecore.io/v1alpha1
-        kind: KubEnv
+      # Start from GithubProvider and find dependents
+      - into: "providerWithDependents"
+        name: "gh-default"
+        apiVersion: "github.platform.kubecore.io/v1alpha1"
+        kind: "GithubProvider"
         optional: false
       traversalConfig:
         enabled: true
-        maxDepth: 4
-        maxResources: 75
-        timeout: "25s"
-        direction: "bidirectional"
+        maxDepth: 3
+        maxResources: 50
+        timeout: "30s"
+        direction: "bidirectional"  # Find both dependencies and dependents
         scopeFilter:
           platformOnly: true
           includeAPIGroups:
-            - "*.kubecore.io"
+            - "github.platform.kubecore.io"
           crossNamespaceEnabled: true
+        referenceResolution:
+          enableDynamicCRDs: true
+          followCustomReferences: true
+          minConfidenceThreshold: 0.5
+        performance:
+          maxConcurrentRequests: 5
+          enableMetrics: true
+
+  # TEST 3: Performance and DAG Construction
+  - step: test-performance-dag
+    functionRef:
+      name: function-kubecore-schema-registry
+    input:
+      apiVersion: registry.fn.crossplane.io/v1beta1
+      kind: Input
+      phase3Features: true
+      fetchTimeout: "30s"
+      maxConcurrentFetches: 5
+      fetchResources:
+      - into: "performanceTest"
+        name: "demo-project"
+        namespace: "test"
+        apiVersion: "github.platform.kubecore.io/v1alpha1"
+        kind: "GitHubProject"
+        optional: false
+      traversalConfig:
+        enabled: true
+        maxDepth: 3
+        maxResources: 50
+        timeout: "30s"
+        direction: "forward"
+        scopeFilter:
+          platformOnly: true
+          includeAPIGroups:
+            - "github.platform.kubecore.io"
         batchConfig:
-          enabled: true                      # TEST batch processing
-          batchSize: 5                       # Smaller batches
+          enabled: true
+          batchSize: 10
           maxConcurrentBatches: 2
-          sameDepthBatching: true
-          batchTimeout: "3s"
         cacheConfig:
-          enabled: true                      # TEST caching
-          ttl: "2m"
-          maxSize: 500
+          enabled: true
+          ttl: "5m"
+          maxSize: 100
           strategy: "lru"
         referenceResolution:
           enableDynamicCRDs: true
-          followOwnerReferences: true
           followCustomReferences: true
-          minConfidenceThreshold: 0.7
+          minConfidenceThreshold: 0.5
         performance:
-          maxConcurrentRequests: 8           # TEST concurrency
-          requestTimeout: "3s"
-          enableMetrics: true                # CAPTURE metrics
+          enableMetrics: true
           resourceDeduplication: true
           memoryLimits:
-            maxGraphSize: 26214400           # 25MB limit
-            maxCacheSize: 5242880            # 5MB cache
-            gcThreshold: 41943040            # 40MB GC
+            maxGraphSize: 10485760
+            maxCacheSize: 2097152
+            gcThreshold: 20971520

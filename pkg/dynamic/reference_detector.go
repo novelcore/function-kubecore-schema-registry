@@ -130,8 +130,17 @@ func (d *PatternBasedDetector) analyzeFieldForReference(fieldName string, fieldD
 func (d *PatternBasedDetector) detectByPattern(fieldName string, fieldDef *FieldDefinition, fieldPath string) *ReferenceField {
 	for _, pattern := range d.patterns {
 		if d.matchesPattern(fieldName, pattern.Pattern) && d.isCompatibleType(fieldDef, pattern) {
+			// Construct proper field path: if we have a simple field name, 
+			// assume it's within spec unless already fully qualified
+			finalFieldPath := fieldPath
+			if fieldPath == fieldName && fieldName != "" {
+				// If fieldPath equals fieldName, it means we're at root level
+				// For most Kubernetes resources, references are in spec
+				finalFieldPath = "spec." + fieldName
+			}
+			
 			return &ReferenceField{
-				FieldPath:       fieldPath,
+				FieldPath:       finalFieldPath,
 				FieldName:       fieldName,
 				TargetKind:      d.inferTargetKind(fieldName, pattern),
 				TargetGroup:     pattern.TargetGroup,
@@ -147,10 +156,16 @@ func (d *PatternBasedDetector) detectByPattern(fieldName string, fieldDef *Field
 
 // detectByHeuristics detects references using heuristic analysis
 func (d *PatternBasedDetector) detectByHeuristics(fieldName string, fieldDef *FieldDefinition, fieldPath string) *ReferenceField {
+	// Construct proper field path for heuristic matches too
+	finalFieldPath := fieldPath
+	if fieldPath == fieldName && fieldName != "" {
+		finalFieldPath = "spec." + fieldName
+	}
+
 	// Check description for reference keywords
 	if d.containsReferenceKeywords(fieldDef.Description) {
 		return &ReferenceField{
-			FieldPath:       fieldPath,
+			FieldPath:       finalFieldPath,
 			FieldName:       fieldName,
 			RefType:         RefTypeCustom,
 			Confidence:      0.7,
@@ -161,7 +176,7 @@ func (d *PatternBasedDetector) detectByHeuristics(fieldName string, fieldDef *Fi
 	// Check for common reference field naming patterns
 	if d.looksLikeReference(fieldName) {
 		return &ReferenceField{
-			FieldPath:       fieldPath,
+			FieldPath:       finalFieldPath,
 			FieldName:       fieldName,
 			RefType:         RefTypeCustom,
 			Confidence:      0.6,
@@ -172,7 +187,7 @@ func (d *PatternBasedDetector) detectByHeuristics(fieldName string, fieldDef *Fi
 	// Check for nested reference structure (e.g., {name: string, namespace: string})
 	if d.hasReferenceStructure(fieldDef) {
 		return &ReferenceField{
-			FieldPath:       fieldPath,
+			FieldPath:       finalFieldPath,
 			FieldName:       fieldName,
 			RefType:         RefTypeCustom,
 			Confidence:      0.8,
