@@ -1,7 +1,7 @@
 ---
 name: crossplane-function-architect
 description: Use this agent when designing the architecture and structure for Crossplane composition functions, particularly those involving resource discovery, relationship mapping, or complex platform integrations. Examples: <example>Context: User is developing a new Crossplane function for KubeCore platform that needs to discover resource relationships. user: "I need to design a function that can traverse GitHubProject → KubeCluster → KubEnv → App relationships efficiently" assistant: "I'll use the crossplane-function-architect agent to design the component architecture and interfaces for your resource discovery function" <commentary>The user needs architectural guidance for a complex Crossplane function involving relationship traversal, which is exactly what this agent specializes in.</commentary></example> <example>Context: User is planning a Crossplane function that needs to inject labels and perform discovery operations. user: "How should I structure my function to handle both label injection and resource discovery while maintaining performance?" assistant: "Let me engage the crossplane-function-architect agent to design the modular structure and component boundaries for your function" <commentary>This requires architectural planning for a multi-concern Crossplane function, perfect for the architect agent.</commentary></example>
-model: sonnet
+model: opus
 color: cyan
 ---
 

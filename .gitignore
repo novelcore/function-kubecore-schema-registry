@@ -24,3 +24,4 @@ docker-compose.yml
 function
 volumes/
 function-kubecore-schema-registry
+docker-compose.yaml

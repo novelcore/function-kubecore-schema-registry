@@ -36,6 +36,13 @@ type Input struct {
 	// Phase2Features enables Phase 2 capabilities (label/expression-based discovery)
 	// +kubebuilder:default=false
 	Phase2Features *bool `json:"phase2Features,omitempty"`
+	
+	// Phase3Features enables Phase 3 capabilities (transitive discovery with DAG construction)
+	// +kubebuilder:default=false
+	Phase3Features *bool `json:"phase3Features,omitempty"`
+	
+	// TraversalConfig contains configuration for Phase 3 transitive discovery
+	TraversalConfig *TraversalConfig `json:"traversalConfig,omitempty"`
 }
 
 // ResourceRequest defines a resource reference for fetching

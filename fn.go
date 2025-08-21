@@ -77,7 +77,9 @@ func (f *Function) RunFunction(ctx context.Context, req *fnv1.RunFunctionRequest
 	phase := "1"
 	tempInput := &v1beta1.Input{}
 	if request.GetInput(req, tempInput) == nil {
-		if tempInput.Phase2Features != nil && *tempInput.Phase2Features {
+		if tempInput.Phase3Features != nil && *tempInput.Phase3Features {
+			phase = "3"
+		} else if tempInput.Phase2Features != nil && *tempInput.Phase2Features {
 			phase = "2"
 		}
 	}
@@ -147,17 +149,19 @@ func (f *Function) RunFunction(ctx context.Context, req *fnv1.RunFunctionRequest
 		maxConcurrent = *in.MaxConcurrentFetches
 	}
 
-	// Determine if Phase 2 features are enabled
+	// Determine enabled phases
 	phase2Enabled := in.Phase2Features != nil && *in.Phase2Features
+	phase3Enabled := in.Phase3Features != nil && *in.Phase3Features
 	
 	f.log.Info("Fetch configuration", 
 		"timeout", timeout,
 		"maxConcurrent", maxConcurrent,
 		"requestCount", len(fetchRequests),
-		"phase2Enabled", phase2Enabled)
+		"phase2Enabled", phase2Enabled,
+		"phase3Enabled", phase3Enabled)
 
-	// Create discovery engine with Phase 2 capabilities if enabled
-	discoveryEngine, err := f.createDiscoveryEngine(timeout, maxConcurrent, phase2Enabled)
+	// Create discovery engine with Phase 2/3 capabilities if enabled
+	discoveryEngine, err := f.createDiscoveryEngine(timeout, maxConcurrent, phase2Enabled, phase3Enabled)
 	if err != nil {
 		response.Fatal(rsp, errors.Wrap(err, "failed to create discovery engine"))
 		return rsp, nil
@@ -213,15 +217,30 @@ func (f *Function) RunFunction(ctx context.Context, req *fnv1.RunFunctionRequest
 }
 
 // createDiscoveryEngine creates a Kubernetes discovery engine
-func (f *Function) createDiscoveryEngine(timeout time.Duration, maxConcurrent int, phase2Enabled bool) (discovery.Engine, error) {
+func (f *Function) createDiscoveryEngine(timeout time.Duration, maxConcurrent int, phase2Enabled bool, phase3Enabled bool) (discovery.Engine, error) {
 	// Get in-cluster configuration
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		return nil, errors.KubernetesClientError(fmt.Sprintf("failed to get in-cluster config: %v", err))
 	}
 
-	// Use enhanced engine if Phase 2 is enabled, otherwise use legacy engine for compatibility
-	if phase2Enabled {
+	// Use enhanced discovery engine if Phase 2 or 3 is enabled
+	if phase3Enabled {
+		// Create enhanced discovery engine with Phase 3 capabilities
+		discoveryContext := discovery.DiscoveryContext{
+			FunctionNamespace:     "crossplane-system", // TODO: Get actual namespace
+			TimeoutPerRequest:     timeout,
+			MaxConcurrentRequests: maxConcurrent,
+			Phase2Enabled:         true, // Phase 3 builds on Phase 2
+		}
+		
+		engine, err := discovery.NewEnhancedDiscoveryEngine(config, f.registry, discoveryContext, f.log)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to create Phase 3 discovery engine")
+		}
+		
+		return engine, nil
+	} else if phase2Enabled {
 		// Create enhanced discovery engine with Phase 2 capabilities
 		discoveryContext := discovery.DiscoveryContext{
 			FunctionNamespace:     "crossplane-system", // TODO: Get actual namespace
