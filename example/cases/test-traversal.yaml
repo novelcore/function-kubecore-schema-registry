@@ -1,0 +1,509 @@
+# Test Case 3: Multi-Hop Transitive Discovery (Phase 3) - ENHANCED
+# This composition performs aggressive multi-hop traversal discovery:
+# 1. Direct match on KubeCluster (demo-cluster) 
+# 2. Traverse KubeCluster.spec.githubProjectRef → GitHubProject (demo-project)
+# 3. Traverse GitHubProject.spec.githubProviderRef → GithubProvider (gh-default)
+# Creates a comprehensive ConfigMap with all discovered resources and detailed markdown report
+
+---
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xtesttraversals.test.kubecore.io
+spec:
+  group: test.kubecore.io
+  names:
+    kind: XTestTraversal
+    plural: xtesttraversals
+  claimNames:
+    kind: TestTraversal
+    plural: testtraversals
+  connectionSecretKeys: []
+  versions:
+  - name: v1alpha1
+    served: true
+    referenceable: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              clusterName:
+                type: string
+                description: "Name of the KubeCluster to start traversal from"
+                default: "demo-cluster"
+              clusterNamespace:
+                type: string
+                description: "Namespace of the KubeCluster (empty for cluster-scoped)"
+                default: ""
+              maxDepth:
+                type: integer
+                description: "Maximum traversal depth"
+                default: 3
+              expectedResources:
+                type: integer
+                description: "Expected number of resources to discover"
+                default: 3
+          status:
+            type: object
+            properties:
+              discoveredResources:
+                type: integer
+              traversalDepth:
+                type: integer
+              testStatus:
+                type: string
+
+---
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: test-traversal
+spec:
+  compositeTypeRef:
+    apiVersion: test.kubecore.io/v1alpha1
+    kind: XTestTraversal
+  mode: Pipeline
+  pipeline:
+  - step: phase3-transitive-discovery
+    functionRef:
+      name: function-kubecore-schema-registry
+    input:
+      apiVersion: registry.fn.crossplane.io/v1beta1
+      kind: Input
+      metadata:
+        name: phase3-traversal-test
+      # Enable Phase 3 transitive discovery with the fixes
+      phase3Features: true
+      traversalConfig:
+        enabled: true
+        maxDepth: 3                      # Allow 3-hop traversal  
+        maxResources: 15                 # Increased resource limit
+        timeout: "25s"                   # Extended timeout for deeper traversal
+        direction: "forward"             # Follow outgoing references
+        
+        # Enhanced scope filter for multi-hop discovery
+        scopeFilter:
+          platformOnly: false            # Don't limit to platform only
+          includeAPIGroups:
+            - "platform.kubecore.io"     # KubeCluster, KubeNet
+            - "github.platform.kubecore.io"  # GitHubProject, GithubProvider
+            - ""                         # Core Kubernetes resources
+          includeNamespaces:
+            - "test" 
+            - "default"
+            - ""                         # Cluster-scoped resources
+        referenceResolution:
+          enableDynamicCRDs: true
+          followCustomReferences: true
+          skipMissingReferences: false   # Fail on missing refs for validation
+          minConfidenceThreshold: 0.7    # Lower threshold for more discovery
+          
+          # Enhanced multi-hop reference patterns
+          additionalPatterns:
+            # KubeCluster → GitHubProject (first hop)
+            - pattern: "githubProjectRef"
+              targetKind: "GitHubProject" 
+              targetGroup: "github.platform.kubecore.io"
+              confidence: 0.95
+              
+            # GitHubProject → GithubProvider (second hop)  
+            - pattern: "githubProviderRef"
+              targetKind: "GithubProvider"
+              targetGroup: "github.platform.kubecore.io"
+              confidence: 0.95
+              
+            # KubeCluster → KubeNet (alternative path)
+            - pattern: "kubeNetRef"
+              targetKind: "KubeNet"
+              targetGroup: "platform.kubecore.io"
+              confidence: 0.9
+        cycleHandling:
+          detectionEnabled: true
+          onCycleDetected: "continue"
+        performance:
+          maxConcurrentRequests: 8      # Higher concurrency for multi-hop
+          requestTimeout: "12s"         # Extended request timeout
+          enableMetrics: true
+          resourceDeduplication: true
+          cacheEnabled: true            # Enable resource caching
+          cacheTTL: "3m"               # Cache resources for 3 minutes
+      
+      # Start aggressive multi-hop traversal from KubeCluster (cluster-scoped)
+      fetchResources:
+        - into: "rootKubeCluster"
+          apiVersion: "platform.kubecore.io/v1alpha1"
+          kind: "KubeCluster"
+          name: "demo-cluster"
+          namespace: ""                  # Cluster-scoped resource
+          matchType: "direct"
+          optional: false
+          
+          # Expected reference paths for validation
+          expectedReferences:
+            - fieldPath: "spec.githubProjectRef.name"
+              targetKind: "GitHubProject"
+              targetNamespace: "test"    # GitHubProject is namespaced
+
+  - step: create-configmap-with-traversal-results
+    functionRef:
+      name: function-go-templating
+    input:
+      apiVersion: gotemplating.fn.crossplane.io/v1beta1
+      kind: GoTemplate
+      source: Inline
+      inline:
+        template: |
+          {{- $schemaResults := index .context "kubecore-schema-registry.fn.kubecore.platform.io/fetched-resources" }}
+          {{- $fetchSummary := index .context "kubecore-schema-registry.fn.kubecore.platform.io/fetch-summary" }}
+          {{- $testName := .observed.composite.resource.metadata.name }}
+          
+          ---
+          apiVersion: kubernetes.crossplane.io/v1alpha2
+          kind: Object
+          metadata:
+            name: {{ $testName }}-traversal-result
+            annotations:
+              crossplane.io/external-name: test-traversal-result
+              gotemplating.fn.crossplane.io/composition-resource-name: {{ $testName }}-traversal-result
+          spec:
+            forProvider:
+              manifest:
+                apiVersion: v1
+                kind: ConfigMap
+                metadata:
+                  name: test-traversal-result
+                  namespace: default
+                  labels:
+                    test-type: "multihop-traversal"
+                    kubecore.io/test: "TestTraversal"
+                    kubecore.io/discovery-method: "aggressive-transitive-discovery"
+                    kubecore.io/traversal-depth: "3"
+                    kubecore.io/root-resource: "kubecluster"
+                data:
+                  # === MULTI-HOP TRAVERSAL DISCOVERY REPORT ===
+                  traversal-report.md: |
+                    # Multi-Hop Resource Discovery Report
+                    
+                    ## Test Configuration
+                    - **Test Type**: Aggressive Multi-Hop Traversal (Enhanced Phase 3)
+                    - **Root Resource**: KubeCluster/demo-cluster (cluster-scoped)
+                    - **Expected Chain**: KubeCluster → GitHubProject → GithubProvider
+                    - **Max Depth**: 3 hops
+                    - **Discovery Method**: Enhanced Transitive Discovery
+                    - **Execution Time**: {{ now | date "2006-01-02T15:04:05Z07:00" }}
+                    
+                    ## Traversal Chain Analysis
+                    
+                    ### Hop 1: Root Resource (KubeCluster)
+                    {{- if $schemaResults.rootKubeCluster }}
+                    ✅ **SUCCESS**: KubeCluster/demo-cluster discovered
+                    - **API Version**: {{ $schemaResults.rootKubeCluster.apiVersion }}
+                    - **Namespace**: {{ $schemaResults.rootKubeCluster.metadata.namespace | default "cluster-scoped" }}
+                    - **Key References**:
+                      - `spec.githubProjectRef.name`: {{ index $schemaResults.rootKubeCluster.spec "githubProjectRef" "name" | default "NOT_SET" }}
+                      - `spec.kubeNetRef.name`: {{ index $schemaResults.rootKubeCluster.spec "kubeNetRef" "name" | default "NOT_SET" }}
+                    - **Region**: {{ index $schemaResults.rootKubeCluster.spec "region" | default "NOT_SET" }}
+                    {{- else }}
+                    ❌ **FAILED**: KubeCluster/demo-cluster not found
+                    {{- end }}
+                    
+                    ### Hop 2: GitHubProject Discovery
+                    {{- $githubProjectFound := false }}
+                    {{- if $schemaResults.multiResources }}
+                    {{- range $resourceType, $resourceList := $schemaResults.multiResources }}
+                    {{- if eq $resourceType "GitHubProject" }}
+                    {{- $githubProjectFound = true }}
+                    ✅ **SUCCESS**: GitHubProject discovered via KubeCluster.spec.githubProjectRef
+                    {{- range $idx, $project := $resourceList }}
+                    - **Resource**: {{ $project.kind }}/{{ $project.metadata.name }}
+                    - **Namespace**: {{ $project.metadata.namespace }}
+                    - **Discovery Path**: KubeCluster → spec.githubProjectRef.name → GitHubProject
+                    - **Provider Reference**: {{ index $project.spec "githubProviderRef" "name" | default "NOT_SET" }}
+                    - **Visibility**: {{ index $project.spec "visibility" | default "NOT_SET" }}
+                    {{- end }}
+                    {{- end }}
+                    {{- end }}
+                    {{- end }}
+                    {{- if not $githubProjectFound }}
+                    ❌ **FAILED**: GitHubProject not discovered via traversal
+                    {{- end }}
+                    
+                    ### Hop 3: GithubProvider Discovery  
+                    {{- $githubProviderFound := false }}
+                    {{- if $schemaResults.multiResources }}
+                    {{- range $resourceType, $resourceList := $schemaResults.multiResources }}
+                    {{- if eq $resourceType "GithubProvider" }}
+                    {{- $githubProviderFound = true }}
+                    ✅ **SUCCESS**: GithubProvider discovered via GitHubProject.spec.githubProviderRef
+                    {{- range $idx, $provider := $resourceList }}
+                    - **Resource**: {{ $provider.kind }}/{{ $provider.metadata.name }}
+                    - **Namespace**: {{ $provider.metadata.namespace }}
+                    - **Discovery Path**: KubeCluster → GitHubProject → spec.githubProviderRef.name → GithubProvider
+                    - **Organization**: {{ index $provider.spec "github" "organization" | default "NOT_SET" }}
+                    - **Is Enterprise**: {{ index $provider.spec "github" "isEnterprise" | default "false" }}
+                    {{- end }}
+                    {{- end }}
+                    {{- end }}
+                    {{- end }}
+                    {{- if not $githubProviderFound }}
+                    ❌ **FAILED**: GithubProvider not discovered via traversal
+                    {{- end }}
+                    
+                    ## Discovery Statistics
+                    {{- if $fetchSummary.discoveryStats }}
+                    - **Total Requested**: {{ $fetchSummary.discoveryStats.totalRequested }}
+                    - **Successful Fetches**: {{ $fetchSummary.discoveryStats.successful }}
+                    - **Transitively Discovered**: {{ $fetchSummary.discoveryStats.transitivelyDiscovered | default 0 }}
+                    - **Max Depth Reached**: {{ $fetchSummary.discoveryStats.maxDepthReached | default 1 }}
+                    - **References Detected**: {{ $fetchSummary.discoveryStats.referencesDetected | default 0 }}
+                    {{- end }}
+                    
+                    ## Resource Count Analysis
+                    {{- $totalResources := 0 }}
+                    {{- if $schemaResults.rootKubeCluster }}{{ $totalResources = add $totalResources 1 }}{{- end }}
+                    {{- if $schemaResults.multiResources }}
+                    {{- range $resourceType, $resourceList := $schemaResults.multiResources }}
+                    {{- $totalResources = add $totalResources (len $resourceList) }}
+                    {{- end }}
+                    {{- end }}
+                    - **Total Resources Discovered**: {{ $totalResources }}
+                    - **Expected Resources**: 3 (KubeCluster + GitHubProject + GithubProvider)
+                    - **Test Result**: {{ if ge $totalResources 3 }}✅ SUCCESS{{ else }}❌ FAILED{{ end }}
+                    
+                    ## Performance Assessment
+                    {{- if $fetchSummary.phase2Results }}
+                    {{- if $fetchSummary.phase2Results.performanceMetrics }}
+                    - **Query Duration**: {{ $fetchSummary.phase2Results.performanceMetrics.queryDuration | default "N/A" }}
+                    - **Cache Hits**: {{ $fetchSummary.phase2Results.performanceMetrics.cacheHits | default 0 }}
+                    - **Network Requests**: {{ $fetchSummary.phase2Results.performanceMetrics.networkRequests | default "N/A" }}
+                    {{- end }}
+                    {{- end }}
+                  
+                  # Multi-hop traversal results - KubeCluster + discovered resources  
+                  {{- if $schemaResults.rootKubeCluster }}
+                  kubecluster-spec.yaml: |
+                    apiVersion: {{ $schemaResults.rootKubeCluster.apiVersion }}
+                    kind: {{ $schemaResults.rootKubeCluster.kind }}
+                    metadata:
+                      name: {{ $schemaResults.rootKubeCluster.metadata.name }}
+                      namespace: {{ $schemaResults.rootKubeCluster.metadata.namespace | default "cluster-scoped" }}
+                    spec:
+                      {{- $schemaResults.rootKubeCluster.spec | toYaml | nindent 22 }}
+                  {{- end }}
+                  
+                  {{- if $schemaResults.multiResources }}
+                  {{- range $resourceType, $resourceList := $schemaResults.multiResources }}
+                  {{- if eq $resourceType "GitHubProject" }}
+                  {{- range $idx, $project := $resourceList }}
+                  githubproject-{{ $idx }}-spec.yaml: |
+                    apiVersion: {{ $project.apiVersion }}
+                    kind: {{ $project.kind }}
+                    metadata:
+                      name: {{ $project.metadata.name }}
+                      namespace: {{ $project.metadata.namespace }}
+                    spec:
+                      {{- $project.spec | toYaml | nindent 22 }}
+                  {{- end }}
+                  {{- end }}
+                  
+                  {{- /* Check for transitively discovered resources in multiResources */}}
+                  {{- if $schemaResults.multiResources }}
+                  {{- range $resourceType, $resourceList := $schemaResults.multiResources }}
+                  {{- if eq $resourceType "GithubProvider" }}
+                  {{- range $idx, $provider := $resourceList }}
+                  githubprovider-{{ $idx }}-spec.yaml: |
+                    apiVersion: {{ $provider.apiVersion }}
+                    kind: {{ $provider.kind }}
+                    metadata:
+                      name: {{ $provider.metadata.name }}
+                      namespace: {{ $provider.metadata.namespace | default "cluster-scoped" }}
+                      {{- if $provider.metadata.labels }}
+                      labels:
+                        {{- $provider.metadata.labels | toYaml | nindent 24 }}
+                      {{- end }}
+                    spec:
+                      {{- $provider.spec | toYaml | nindent 22 }}
+                  {{- end }}
+                  {{- end }}
+                  {{- end }}
+                  {{- end }}
+                  
+                  # Calculate total resources discovered (multi-hop)
+                  {{- $totalResources := 0 }}
+                  {{- if $schemaResults.rootKubeCluster }}{{ $totalResources = add $totalResources 1 }}{{- end }}
+                  {{- if $schemaResults.multiResources }}
+                  {{- range $resourceType, $resourceList := $schemaResults.multiResources }}
+                  {{- $totalResources = add $totalResources (len $resourceList) }}
+                  {{- end }}
+                  {{- end }}
+                  
+                  resource-count: "{{ $totalResources }}"
+                  discovery-method: "aggressive-multihop-transitive-discovery"
+                  {{- if ge $totalResources 3 }}
+                  test-result: "SUCCESS"
+                  traversal-success: "true"
+                  multihop-discovery: "SUCCESS - Full 3-hop chain discovered"
+                  reference-resolution: "SUCCESS - KubeCluster→GitHubProject→GithubProvider chain resolved"
+                  {{- else }}
+                  test-result: "FAILED"
+                  traversal-success: "false"
+                  multihop-discovery: "FAILED - Incomplete traversal chain"
+                  reference-resolution: "FAILED - Multi-hop chain not fully resolved"
+                  {{- end }}
+                  
+                  # Phase 3 specific metadata
+                  {{- if $fetchSummary.discoveryStats }}
+                  total-requested: "{{ $fetchSummary.discoveryStats.totalRequested }}"
+                  successful-fetches: "{{ $fetchSummary.discoveryStats.successful }}"
+                  transitively-discovered: "{{ $fetchSummary.discoveryStats.transitivelyDiscovered | default 0 }}"
+                  max-depth-reached: "{{ $fetchSummary.discoveryStats.maxDepthReached | default 1 }}"
+                  {{- if $fetchSummary.discoveryStats.referencesDetected }}
+                  references-detected: "{{ $fetchSummary.discoveryStats.referencesDetected }}"
+                  {{- end }}
+                  {{- end }}
+                  
+                  # Reference resolution details
+                  expected-reference: "spec.githubProviderRef.name = gh-default"
+                  target-resource: "GithubProvider/gh-default"
+                  pattern-confidence: "0.95"
+                  detection-method: "pattern_match"
+                  
+                  # Expected GithubProvider Schema Definition
+                  expected-githubprovider-schema.yaml: |
+                    apiVersion: github.platform.kubecore.io/v1alpha1
+                    kind: GithubProvider
+                    metadata:
+                      name: gh-default
+                      namespace: test
+                    spec:
+                      # Secret store configuration for GitHub credentials
+                      secretStoreRef:
+                        kind: SecretStore
+                        name: aws-secret-store
+                      
+                      # AWS Secrets Manager integration
+                      aws:
+                        secretId: github/api-token
+                      
+                      # Kubernetes Secret fallback
+                      secret:
+                        name: github-credentials
+                        namespace: test
+                      
+                      # GitHub configuration
+                      github:
+                        organization: kubecore-org
+                        isEnterprise: false
+                        baseURL: https://api.github.com
+                      
+                      # Provider refresh settings
+                      refreshInterval: 5m
+                      kubernetesProviderConfigRef: kubecore-k8s-provider
+                    
+                    status:
+                      conditions:
+                        - type: Ready
+                          status: "True"
+                          reason: ProviderConfigured
+                          message: GitHub provider is ready and authenticated
+                        - type: Authenticated  
+                          status: "True"
+                          reason: TokenValid
+                          message: GitHub API token is valid and has required permissions
+                      
+                      # Provider connection status
+                      lastSyncTime: "2024-01-15T10:30:00Z"
+                      apiRateLimit:
+                        limit: 5000
+                        remaining: 4850
+                        resetTime: "2024-01-15T11:00:00Z"
+                  
+                  # Schema Validation Results
+                  schema-validation-results.yaml: |
+                    # GithubProvider Schema Fields (from embedded registry)
+                    schemaValidation:
+                      apiVersion: github.platform.kubecore.io/v1alpha1
+                      kind: GithubProvider
+                      namespaced: true
+                      
+                      requiredFields:
+                        spec:
+                          - github.organization  # Required for GitHub API access
+                          
+                      optionalFields:
+                        spec:
+                          secretStoreRef:
+                            - kind (string)
+                            - name (string)
+                          aws:
+                            - secretId (string)
+                          secret:
+                            - name (string)
+                            - namespace (string)
+                          github:
+                            - isEnterprise (boolean)
+                            - baseURL (string)
+                            - organization (string)
+                          - refreshInterval (string)
+                          - kubernetesProviderConfigRef (string)
+                        status:
+                          conditions:
+                            - type (string)
+                            - status (string)
+                            - reason (string)
+                            - message (string)
+                      
+                      referencePatterns:
+                        - fieldPath: "$.spec.secretStoreRef.name"
+                          targetKind: "SecretStore"
+                          confidence: 0.9
+                        - fieldPath: "$.spec.secret.name"  
+                          targetKind: "Secret"
+                          confidence: 0.85
+                      
+                      traversalExpectations:
+                        incomingReferences:
+                          - sourceKind: "GitHubProject"
+                            sourceField: "spec.githubProviderRef.name"
+                            matchField: "metadata.name"
+                        outgoingReferences:
+                          - targetKind: "SecretStore"
+                            viaField: "spec.secretStoreRef.name"
+                          - targetKind: "Secret"
+                            viaField: "spec.secret.name"
+                  
+                  # Test metadata (updated for multi-hop)
+                  test-name: "TestTraversal"
+                  test-type: "Aggressive Multi-Hop Transitive Discovery (Enhanced Phase 3)"
+                  test-description: "Starts with KubeCluster and discovers full chain via references: KubeCluster → GitHubProject → GithubProvider"
+                  root-resource: "KubeCluster/demo-cluster (cluster-scoped)"
+                  expected-traversal: "KubeCluster -> githubProjectRef -> GitHubProject -> githubProviderRef -> GithubProvider"
+                  traversal-hops: "3"
+                  max-depth-configured: "3"
+                  execution-time: "{{ now | date "2006-01-02T15:04:05Z07:00" }}"
+                  
+                  # Debug information
+                  {{- if $fetchSummary.phase2Results }}
+                  phase3-enabled: "true"
+                  {{- if $fetchSummary.phase2Results.queryPlan }}
+                  query-plan-available: "true"
+                  {{- end }}
+                  {{- if $fetchSummary.phase2Results.performanceMetrics }}
+                  performance-metrics: "available"
+                  {{- end }}
+                  {{- else }}
+                  phase3-enabled: "false"
+                  warning: "Phase 3 features may not be fully enabled"
+                  {{- end }}
+            providerConfigRef:
+              name: kubesys-enhanced
+  # STEP 8: Auto-ready
+  - step: auto-ready
+    functionRef:
+      name: function-auto-ready
+    input:
+      apiVersion: autoready.fn.crossplane.io/v1beta1
+      kind: Input

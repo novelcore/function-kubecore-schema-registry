@@ -338,6 +338,52 @@ func (r *EmbeddedRegistry) loadKubeCoreTypes() {
 					"region": {
 						Type: "string",
 					},
+					"githubProjectRef": {
+						Type: "object",
+						Properties: map[string]FieldSchema{
+							"name": {
+								Type: "string",
+								References: []ResourceReference{
+									{
+										FieldPath:   "$.spec.githubProjectRef.name",
+										TargetKind:  "GitHubProject",
+										TargetGroup: "github.platform.kubecore.io",
+										RefType:     RefTypeCustom,
+									},
+								},
+							},
+						},
+					},
+					"kubeNetRef": {
+						Type: "object",
+						Properties: map[string]FieldSchema{
+							"name": {
+								Type: "string",
+								References: []ResourceReference{
+									{
+										FieldPath:   "$.spec.kubeNetRef.name",
+										TargetKind:  "KubeNet",
+										TargetGroup: "platform.kubecore.io",
+										RefType:     RefTypeCustom,
+									},
+								},
+							},
+						},
+					},
+					"providerConfigRef": {
+						Type: "object",
+						Properties: map[string]FieldSchema{
+							"aws": {
+								Type: "string",
+							},
+							"azure": {
+								Type: "string",
+							},
+							"gcp": {
+								Type: "string",
+							},
+						},
+					},
 				},
 			},
 		},

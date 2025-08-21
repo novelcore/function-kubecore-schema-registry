@@ -1,0 +1,19 @@
+# Claim for TestLabel - Label Match on GithubProvider
+# This creates a test instance that performs label-based resource discovery
+
+apiVersion: test.kubecore.io/v1alpha1
+kind: TestLabel
+metadata:
+  name: label-match-demo
+  namespace: default
+  labels:
+    test-type: "label-match"
+    kubecore.io/test-case: "example-2"
+  annotations:
+    kubecore.io/description: "Demonstrates label-based resource discovery"
+    kubecore.io/expected-result: "1+ resources (GithubProvider resources)"
+spec:
+  organization: "novelcore"
+  providerType: "github"
+  compositionRef:
+    name: test-label

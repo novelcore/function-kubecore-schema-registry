@@ -1,0 +1,157 @@
+# Test Case 2: Label Match on GithubProvider
+# This composition performs a label-based match on GithubProvider resources
+# and creates a ConfigMap with the resource spec in the data field
+
+---
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xtestlabels.test.kubecore.io
+spec:
+  group: test.kubecore.io
+  names:
+    kind: XTestLabel
+    plural: xtestlabels
+  claimNames:
+    kind: TestLabel
+    plural: testlabels
+  connectionSecretKeys: []
+  versions:
+  - name: v1alpha1
+    served: true
+    referenceable: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              organization:
+                type: string
+                description: "GitHub organization to match"
+                default: "novelcore"
+              providerType:
+                type: string
+                description: "Provider type to match"
+                default: "github"
+          status:
+            type: object
+            properties:
+              discoveredResources:
+                type: integer
+              testStatus:
+                type: string
+
+---
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: test-label
+spec:
+  compositeTypeRef:
+    apiVersion: test.kubecore.io/v1alpha1
+    kind: XTestLabel
+  mode: Pipeline
+  pipeline:
+  - step: fetch-github-provider-by-labels
+    functionRef:
+      name: function-kubecore-schema-registry
+    input:
+      apiVersion: registry.fn.crossplane.io/v1beta1
+      kind: Input
+      metadata:
+        name: label-match-test
+      # Phase 2 features for label matching
+      phase2Features: true
+      fetchResources:
+        - into: "githubProviders"
+          apiVersion: "github.platform.kubecore.io/v1alpha1"
+          kind: "GithubProvider"
+          matchType: "label"
+          namespace: "default"
+          optional: false
+          selector:
+            labels:
+              matchLabels:
+                kubecore.io/organization: "novelcore"
+                kubecore.io/scmp-provider-type: "github"
+          strategy:
+            maxMatches: 10
+            minMatches: 1
+            sortBy:
+              - field: "metadata.name"
+                order: "asc"
+
+  - step: create-configmap-with-results
+    functionRef:
+      name: function-go-templating
+    input:
+      apiVersion: gotemplating.fn.crossplane.io/v1beta1
+      kind: GoTemplate
+      source: Inline
+      inline:
+        template: |
+          {{- $schemaResults := index .context "kubecore-schema-registry.fn.kubecore.platform.io/fetched-resources" }}
+          {{- $testName := .observed.composite.resource.metadata.name }}
+          
+          ---
+          apiVersion: kubernetes.crossplane.io/v1alpha2
+          kind: Object
+          metadata:
+            name: {{ $testName }}-label-result
+            annotations:
+              crossplane.io/external-name: test-label-result
+              gotemplating.fn.crossplane.io/composition-resource-name: {{ $testName }}-label-result
+          spec:
+            forProvider:
+              manifest:
+                apiVersion: v1
+                kind: ConfigMap
+                metadata:
+                  name: test-label-result
+                  namespace: default
+                  labels:
+                    test-type: "label-match"
+                    kubecore.io/test: "TestLabel"
+                    kubecore.io/discovery-method: "label-selector"
+                data:
+                  {{- if $schemaResults.githubProviders }}
+                  {{- range $idx, $provider := $schemaResults.githubProviders }}
+                  githubprovider-{{ $idx }}-spec.yaml: |
+                    apiVersion: {{ $provider.apiVersion }}
+                    kind: {{ $provider.kind }}
+                    metadata:
+                      name: {{ $provider.metadata.name }}
+                      namespace: {{ $provider.metadata.namespace | default "cluster-scoped" }}
+                      labels:
+                        {{- $provider.metadata.labels | toYaml | nindent 24 }}
+                    spec:
+                      {{- $provider.spec | toYaml | nindent 22 }}
+                  {{- end }}
+                  resource-count: "{{ len $schemaResults.githubProviders }}"
+                  discovery-method: "label-selector"
+                  test-result: "SUCCESS"
+                  matched-labels: "kubecore.io/organization=novelcore,kubecore.io/scmp-provider-type=github"
+                  {{- else }}
+                  resource-count: "0"
+                  discovery-method: "label-selector"
+                  test-result: "FAILED"
+                  error: "No GithubProvider resources found with matching labels"
+                  expected-labels: "kubecore.io/organization=novelcore,kubecore.io/scmp-provider-type=github"
+                  {{- end }}
+                  test-name: "TestLabel"
+                  test-type: "Label Match on GithubProvider"
+                  test-description: "Finds GithubProvider resources using label selectors"
+                  selector-labels: "kubecore.io/organization=novelcore AND kubecore.io/scmp-provider-type=github"
+                  execution-time: "{{ now | date "2006-01-02T15:04:05Z07:00" }}"
+            providerConfigRef:
+              name: kubesys-enhanced
+
+  # STEP 8: Auto-ready
+  - step: auto-ready
+    functionRef:
+      name: function-auto-ready
+    input:
+      apiVersion: autoready.fn.crossplane.io/v1beta1
+      kind: Input

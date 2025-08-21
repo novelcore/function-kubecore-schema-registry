@@ -1,0 +1,156 @@
+# Test Case 1: Direct Match on GitHubProject
+# This composition performs a direct fetch of a specific GitHubProject resource
+# and creates a ConfigMap with the resource spec in the data field
+
+---
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xtestdirects.test.kubecore.io
+spec:
+  group: test.kubecore.io
+  names:
+    kind: XTestDirect
+    plural: xtestdirects
+  claimNames:
+    kind: TestDirect
+    plural: testdirects
+  connectionSecretKeys: []
+  versions:
+  - name: v1alpha1
+    served: true
+    referenceable: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              projectName:
+                type: string
+                description: "Name of the GitHubProject to fetch"
+                default: "demo-project"
+              projectNamespace:
+                type: string
+                description: "Namespace of the GitHubProject"
+                default: "test"
+          status:
+            type: object
+            properties:
+              discoveredResources:
+                type: integer
+              testStatus:
+                type: string
+
+---
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: test-direct
+spec:
+  compositeTypeRef:
+    apiVersion: test.kubecore.io/v1alpha1
+    kind: XTestDirect
+  mode: Pipeline
+  pipeline:
+  # STEP 1: Label the XR - CORRECTED VERSION
+  
+  # Rest of your pipeline remains the same
+  - step: fetch-github-project-direct
+    functionRef:
+      name: function-kubecore-schema-registry
+    input:
+      apiVersion: registry.fn.crossplane.io/v1beta1
+      kind: Input
+      metadata:
+        name: direct-match-test
+      phase3Features: false
+      fetchResources:
+        - into: "githubProject"
+          apiVersion: "github.platform.kubecore.io/v1alpha1"
+          kind: "GitHubProject"
+          name: "demo-project"
+          namespace: "test"
+          matchType: "direct"
+          optional: false
+
+  - step: create-configmap-with-results
+    functionRef:
+      name: function-go-templating
+    input:
+      apiVersion: gotemplating.fn.crossplane.io/v1beta1
+      kind: GoTemplate
+      source: Inline
+      inline:
+        template: |
+          {{- $schemaResults := index .context "kubecore-schema-registry.fn.kubecore.platform.io/fetched-resources" }}
+          {{- $testName := .observed.composite.resource.metadata.name }}
+          
+          ---
+          apiVersion: {{ .observed.composite.resource.apiVersion }}
+          kind: {{ .observed.composite.resource.kind }}
+          metadata:
+            name: {{ .observed.composite.resource.metadata.name }}
+            labels:
+              kubecore.io/organization: "novelcore"
+              kubecore.io/scmp-provider-type: "github"
+              {{- range $key, $value := .observed.composite.resource.metadata.labels }}
+              {{- if not (or (eq $key "kubecore.io/organization") (eq $key "kubecore.io/scmp-provider-type")) }}
+              {{ $key }}: {{ $value | quote }}
+              {{- end }}
+              {{- end }}
+          spec:
+            {{- .observed.composite.resource.spec | toYaml | nindent 10 }}
+          ---
+          apiVersion: kubernetes.crossplane.io/v1alpha2
+          kind: Object
+          metadata:
+            name: {{ $testName }}-direct-result
+            annotations:
+              crossplane.io/external-name: test-direct-result
+              gotemplating.fn.crossplane.io/composition-resource-name: {{ $testName }}-direct-result
+          spec:
+            forProvider:
+              manifest:
+                apiVersion: v1
+                kind: ConfigMap
+                metadata:
+                  name: test-direct-result
+                  namespace: default
+                  labels:
+                    test-type: "direct-match"
+                    kubecore.io/test: "TestDirect"
+                    kubecore.io/discovery-method: "direct"
+                data:
+                  {{- if $schemaResults.githubProject }}
+                  githubproject-spec.yaml: |
+                    apiVersion: {{ $schemaResults.githubProject.apiVersion }}
+                    kind: {{ $schemaResults.githubProject.kind }}
+                    metadata:
+                      name: {{ $schemaResults.githubProject.metadata.name }}
+                      namespace: {{ $schemaResults.githubProject.metadata.namespace }}
+                    spec:
+                      {{- $schemaResults.githubProject.spec | toYaml | nindent 22 }}
+                  resource-count: "1"
+                  discovery-method: "direct-match"
+                  test-result: "SUCCESS"
+                  {{- else }}
+                  resource-count: "0"
+                  discovery-method: "direct-match"
+                  test-result: "FAILED"
+                  error: "GitHubProject not found"
+                  {{- end }}
+                  test-name: "TestDirect"
+                  test-type: "Direct Match on GitHubProject"
+                  test-description: "Fetches a specific GitHubProject resource directly by name"
+                  execution-time: "{{ now | date "2006-01-02T15:04:05Z07:00" }}"
+            providerConfigRef:
+              name: kubesys-enhanced
+
+  - step: auto-ready
+    functionRef:
+      name: function-auto-ready
+    input:
+      apiVersion: autoready.fn.crossplane.io/v1beta1
+      kind: Input

@@ -27,11 +27,15 @@ When you receive a testing request, you will:
 - You should not delete or create new platform resources apart from the testing composition/definition/claim resource
 - You are allowed to edit the existing platform resources located at example/resources and apply them to the cluster, so as to alter their state in case you need to verify the functionality (eg. add/remove labels)
 - You can find the expected function Input at : input/ directory.
+- To test dont create a composition and claim if not nessery, you can find ready to go examples against common cases here : example/cases. You can enchance these examples with the adjustments you need to test against.  And its advised to do so. 
+
+
 
 **3. EXECUTE LIVE TESTING**
 - Apply your test resources to the Kubernetes cluster using kubectl
 - Monitor resource creation and status progression
 - Capture actual results from the deployed resources
+- You can use the /debug-composition <COMPOSITION_NAME> [RESOURCE_NAME] command in order to find usefull information about composition status.
 - Observe any error conditions or unexpected behaviors
 - Once you rich a final conclusion be sure to remove any resources you created eg. composition/definition/claim for testing purposes.
 

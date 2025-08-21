@@ -1,0 +1,26 @@
+# Claim for TestTraversal - Phase 3 Transitive Discovery
+# This creates a test instance that demonstrates the Phase 3 transitive discovery
+# with the scope filtering fixes that resolve githubProviderRef patterns
+
+apiVersion: test.kubecore.io/v1alpha1
+kind: TestTraversal
+metadata:
+  name: phase3-traversal-demo
+  namespace: default
+  labels:
+    test-type: "phase3-traversal"
+    kubecore.io/test-case: "example-3"
+    kubecore.io/feature: "transitive-discovery"
+  annotations:
+    kubecore.io/description: "Demonstrates Phase 3 transitive discovery with githubProviderRef resolution"
+    kubecore.io/expected-result: "2 resources (GitHubProject + GithubProvider)"
+    kubecore.io/traversal-path: "GitHubProject -> githubProviderRef -> GithubProvider"
+    kubecore.io/pattern-confidence: "0.95"
+    kubecore.io/discovery-method: "phase3-transitive-discovery"
+spec:
+  projectName: "demo-project"
+  projectNamespace: "test"
+  maxDepth: 2
+  expectedResources: 2
+  compositionRef:
+    name: test-traversal

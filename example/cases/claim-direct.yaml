@@ -1,0 +1,19 @@
+# Claim for TestDirect - Direct Match on GitHubProject
+# This creates a test instance that performs direct resource fetching
+
+apiVersion: test.kubecore.io/v1alpha1
+kind: TestDirect
+metadata:
+  name: direct-match-demo
+  namespace: default
+  labels:
+    test-type: "direct-match"
+    kubecore.io/test-case: "example-1"
+  annotations:
+    kubecore.io/description: "Demonstrates direct resource fetching by name"
+    kubecore.io/expected-result: "1 resource (GitHubProject)"
+spec:
+  projectName: "demo-project"
+  projectNamespace: "test"
+  compositionRef:
+    name: test-direct

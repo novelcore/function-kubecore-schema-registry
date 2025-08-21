@@ -1,0 +1,132 @@
+apiVersion: v1
+data:
+  detection-method: pattern_match
+  discovery-method: phase3-transitive-discovery
+  execution-time: "2025-08-21T16:02:18Z"
+  expected-githubprovider-schema.yaml: "apiVersion: github.platform.kubecore.io/v1alpha1\nkind:
+    GithubProvider\nmetadata:\n  name: gh-default\n  namespace: test\nspec:\n  # Secret
+    store configuration for GitHub credentials\n  secretStoreRef:\n    kind: SecretStore\n
+    \   name: aws-secret-store\n  \n  # AWS Secrets Manager integration\n  aws:\n
+    \   secretId: github/api-token\n  \n  # Kubernetes Secret fallback\n  secret:\n
+    \   name: github-credentials\n    namespace: test\n  \n  # GitHub configuration\n
+    \ github:\n    organization: kubecore-org\n    isEnterprise: false\n    baseURL:
+    https://api.github.com\n  \n  # Provider refresh settings\n  refreshInterval:
+    5m\n  kubernetesProviderConfigRef: kubecore-k8s-provider\n\nstatus:\n  conditions:\n
+    \   - type: Ready\n      status: \"True\"\n      reason: ProviderConfigured\n
+    \     message: GitHub provider is ready and authenticated\n    - type: Authenticated
+    \ \n      status: \"True\"\n      reason: TokenValid\n      message: GitHub API
+    token is valid and has required permissions\n  \n  # Provider connection status\n
+    \ lastSyncTime: \"2024-01-15T10:30:00Z\"\n  apiRateLimit:\n    limit: 5000\n    remaining:
+    4850\n    resetTime: \"2024-01-15T11:00:00Z\"\n"
+  expected-reference: spec.githubProviderRef.name = gh-default
+  expected-traversal: GitHubProject -> githubProviderRef -> GithubProvider
+  githubproject-spec.yaml: "apiVersion: github.platform.kubecore.io/v1alpha1\nkind:
+    GitHubProject\nmetadata:\n  name: demo-project\n  namespace: test\nspec:\n            compositeDeletePolicy:
+    Background\n            compositionRef:\n                name: githubprojects.github.platform.kubecore.io\n
+    \           compositionRevisionRef:\n                name: githubprojects.github.platform.kubecore.io-ffae40f\n
+    \           description: Testing scope fixes - updated at $(date)\n            githubProviderRef:\n
+    \               name: gh-test-namespace\n                namespace: test\n            repositorySource:\n
+    \               template:\n                    includeAllBranches: false\n                    owner:
+    novelcore\n                    repository: kubeproject-template\n                type:
+    template\n            resourceRef:\n                apiVersion: github.platform.kubecore.io/v1alpha1\n
+    \               kind: XGitHubProject\n                name: demo-project-zpmwk\n
+    \           teamConfiguration:\n                parentTeams:\n                    main:
+    \"12972099\"\n                teamMembers:\n                    business:\n                        -
+    role: member\n                          username: dfourakis\n                    ops:\n
+    \                       - role: maintainer\n                          username:
+    AbstractVersion\n                    software:\n                        - role:
+    maintainer\n                          username: AbstractVersion\n            visibility:
+    private\n            \n"
+  pattern-confidence: "0.95"
+  phase3-enabled: "false"
+  reference-resolution: SUCCESS - githubProviderRef detected and resolved
+  resource-count: "2"
+  root-resource: GitHubProject/demo-project (test namespace)
+  schema-validation-results.yaml: "# GithubProvider Schema Fields (from embedded registry)\nschemaValidation:\n
+    \ apiVersion: github.platform.kubecore.io/v1alpha1\n  kind: GithubProvider\n  namespaced:
+    true\n  \n  requiredFields:\n    spec:\n      - github.organization  # Required
+    for GitHub API access\n      \n  optionalFields:\n    spec:\n      secretStoreRef:\n
+    \       - kind (string)\n        - name (string)\n      aws:\n        - secretId
+    (string)\n      secret:\n        - name (string)\n        - namespace (string)\n
+    \     github:\n        - isEnterprise (boolean)\n        - baseURL (string)\n
+    \       - organization (string)\n      - refreshInterval (string)\n      - kubernetesProviderConfigRef
+    (string)\n    status:\n      conditions:\n        - type (string)\n        - status
+    (string)\n        - reason (string)\n        - message (string)\n  \n  referencePatterns:\n
+    \   - fieldPath: \"$.spec.secretStoreRef.name\"\n      targetKind: \"SecretStore\"\n
+    \     confidence: 0.9\n    - fieldPath: \"$.spec.secret.name\"  \n      targetKind:
+    \"Secret\"\n      confidence: 0.85\n  \n  traversalExpectations:\n    incomingReferences:\n
+    \     - sourceKind: \"GitHubProject\"\n        sourceField: \"spec.githubProviderRef.name\"\n
+    \       matchField: \"metadata.name\"\n    outgoingReferences:\n      - targetKind:
+    \"SecretStore\"\n        viaField: \"spec.secretStoreRef.name\"\n      - targetKind:
+    \"Secret\"\n        viaField: \"spec.secret.name\"\n"
+  target-resource: GithubProvider/gh-default
+  test-description: Starts with GitHubProject and discovers related GithubProvider
+    via githubProviderRef
+  test-name: TestTraversal
+  test-result: SUCCESS
+  test-type: Phase 3 Transitive Discovery
+  traversal-success: "true"
+  warning: Phase 3 features may not be fully enabled
+kind: ConfigMap
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: '{"apiVersion":"v1","data":{"detection-method":"pattern_match","discovery-method":"phase3-transitive-discovery","execution-time":"2025-08-21T16:02:18Z","expected-githubprovider-schema.yaml":"apiVersion:
+      github.platform.kubecore.io/v1alpha1\nkind: GithubProvider\nmetadata:\n  name:
+      gh-default\n  namespace: test\nspec:\n  # Secret store configuration for GitHub
+      credentials\n  secretStoreRef:\n    kind: SecretStore\n    name: aws-secret-store\n  \n  #
+      AWS Secrets Manager integration\n  aws:\n    secretId: github/api-token\n  \n  #
+      Kubernetes Secret fallback\n  secret:\n    name: github-credentials\n    namespace:
+      test\n  \n  # GitHub configuration\n  github:\n    organization: kubecore-org\n    isEnterprise:
+      false\n    baseURL: https://api.github.com\n  \n  # Provider refresh settings\n  refreshInterval:
+      5m\n  kubernetesProviderConfigRef: kubecore-k8s-provider\n\nstatus:\n  conditions:\n    -
+      type: Ready\n      status: \"True\"\n      reason: ProviderConfigured\n      message:
+      GitHub provider is ready and authenticated\n    - type: Authenticated  \n      status:
+      \"True\"\n      reason: TokenValid\n      message: GitHub API token is valid
+      and has required permissions\n  \n  # Provider connection status\n  lastSyncTime:
+      \"2024-01-15T10:30:00Z\"\n  apiRateLimit:\n    limit: 5000\n    remaining: 4850\n    resetTime:
+      \"2024-01-15T11:00:00Z\"\n","expected-reference":"spec.githubProviderRef.name
+      = gh-default","expected-traversal":"GitHubProject -\u003e githubProviderRef
+      -\u003e GithubProvider","githubproject-spec.yaml":"apiVersion: github.platform.kubecore.io/v1alpha1\nkind:
+      GitHubProject\nmetadata:\n  name: demo-project\n  namespace: test\nspec:\n            compositeDeletePolicy:
+      Background\n            compositionRef:\n                name: githubprojects.github.platform.kubecore.io\n            compositionRevisionRef:\n                name:
+      githubprojects.github.platform.kubecore.io-ffae40f\n            description:
+      Testing scope fixes - updated at $(date)\n            githubProviderRef:\n                name:
+      gh-test-namespace\n                namespace: test\n            repositorySource:\n                template:\n                    includeAllBranches:
+      false\n                    owner: novelcore\n                    repository:
+      kubeproject-template\n                type: template\n            resourceRef:\n                apiVersion:
+      github.platform.kubecore.io/v1alpha1\n                kind: XGitHubProject\n                name:
+      demo-project-zpmwk\n            teamConfiguration:\n                parentTeams:\n                    main:
+      \"12972099\"\n                teamMembers:\n                    business:\n                        -
+      role: member\n                          username: dfourakis\n                    ops:\n                        -
+      role: maintainer\n                          username: AbstractVersion\n                    software:\n                        -
+      role: maintainer\n                          username: AbstractVersion\n            visibility:
+      private\n            \n","pattern-confidence":"0.95","phase3-enabled":"false","reference-resolution":"SUCCESS
+      - githubProviderRef detected and resolved","resource-count":"2","root-resource":"GitHubProject/demo-project
+      (test namespace)","schema-validation-results.yaml":"# GithubProvider Schema
+      Fields (from embedded registry)\nschemaValidation:\n  apiVersion: github.platform.kubecore.io/v1alpha1\n  kind:
+      GithubProvider\n  namespaced: true\n  \n  requiredFields:\n    spec:\n      -
+      github.organization  # Required for GitHub API access\n      \n  optionalFields:\n    spec:\n      secretStoreRef:\n        -
+      kind (string)\n        - name (string)\n      aws:\n        - secretId (string)\n      secret:\n        -
+      name (string)\n        - namespace (string)\n      github:\n        - isEnterprise
+      (boolean)\n        - baseURL (string)\n        - organization (string)\n      -
+      refreshInterval (string)\n      - kubernetesProviderConfigRef (string)\n    status:\n      conditions:\n        -
+      type (string)\n        - status (string)\n        - reason (string)\n        -
+      message (string)\n  \n  referencePatterns:\n    - fieldPath: \"$.spec.secretStoreRef.name\"\n      targetKind:
+      \"SecretStore\"\n      confidence: 0.9\n    - fieldPath: \"$.spec.secret.name\"  \n      targetKind:
+      \"Secret\"\n      confidence: 0.85\n  \n  traversalExpectations:\n    incomingReferences:\n      -
+      sourceKind: \"GitHubProject\"\n        sourceField: \"spec.githubProviderRef.name\"\n        matchField:
+      \"metadata.name\"\n    outgoingReferences:\n      - targetKind: \"SecretStore\"\n        viaField:
+      \"spec.secretStoreRef.name\"\n      - targetKind: \"Secret\"\n        viaField:
+      \"spec.secret.name\"\n","target-resource":"GithubProvider/gh-default","test-description":"Starts
+      with GitHubProject and discovers related GithubProvider via githubProviderRef","test-name":"TestTraversal","test-result":"SUCCESS","test-type":"Phase
+      3 Transitive Discovery","traversal-success":"true","warning":"Phase 3 features
+      may not be fully enabled"},"kind":"ConfigMap","metadata":{"labels":{"kubecore.io/discovery-method":"transitive-discovery","kubecore.io/test":"TestTraversal","test-type":"phase3-traversal"},"name":"test-traversal-result","namespace":"default"}}'
+  creationTimestamp: "2025-08-21T15:50:29Z"
+  labels:
+    kubecore.io/discovery-method: transitive-discovery
+    kubecore.io/test: TestTraversal
+    test-type: phase3-traversal
+  name: test-traversal-result
+  namespace: default
+  resourceVersion: "2793499"
+  uid: a076f153-db74-4fd1-aa4f-9e5ea87d0a20
