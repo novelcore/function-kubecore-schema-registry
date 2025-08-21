@@ -829,7 +829,7 @@ func (pt *DefaultPathTracker) validatePath(graph *ResourceGraph, path DiscoveryP
 	}
 	
 	// Validate nodes exist
-	for i, nodeID := range path.Nodes {
+	for _, nodeID := range path.Nodes {
 		if _, exists := graph.Nodes[nodeID]; !exists {
 			result.InvalidPaths++
 			result.ValidationErrors = append(result.ValidationErrors, PathValidationError{

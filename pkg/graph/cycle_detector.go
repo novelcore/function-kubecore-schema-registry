@@ -1,7 +1,6 @@
 package graph
 
 import (
-	"fmt"
 	"time"
 )
 
@@ -407,7 +406,7 @@ func (cd *DFSCycleDetector) createCycleFromPath(graph *ResourceGraph, pathStack 
 	// Determine if cycle is simple (no repeated nodes except start/end)
 	nodeSet := make(map[NodeID]bool)
 	isSimple := true
-	for i, nodeID := range cycleNodes[:len(cycleNodes)-1] { // Exclude the repeated start node
+	for _, nodeID := range cycleNodes[:len(cycleNodes)-1] { // Exclude the repeated start node
 		if nodeSet[nodeID] {
 			isSimple = false
 			break

@@ -2,8 +2,6 @@ package graph
 
 import (
 	"container/heap"
-	"fmt"
-	"sort"
 )
 
 // GraphTraverser provides functionality to traverse resource dependency graphs
@@ -317,18 +315,6 @@ func (gt *DefaultGraphTraverser) DepthFirstTraversal(graph *ResourceGraph, maxDe
 
 // ForwardTraversal follows outbound edges from the given nodes
 func (gt *DefaultGraphTraverser) ForwardTraversal(graph *ResourceGraph, startNodes []NodeID, maxDepth int) *TraversalResult {
-	result := &TraversalResult{
-		VisitedNodes:    make([]NodeID, 0),
-		VisitedEdges:    make([]EdgeID, 0),
-		TraversalOrder:  VisitOrderBreadthFirst,
-		NodesByDepth:    make(map[int][]NodeID),
-		TraversalMetadata: &TraversalMetadata{
-			StartNodes: startNodes,
-			Direction:  TraversalDirectionForward,
-			Statistics: &TraversalStatistics{},
-		},
-	}
-	
 	// Temporarily set root nodes to start nodes and perform BFS
 	originalRootNodes := graph.Metadata.RootNodes
 	graph.Metadata.RootNodes = startNodes
