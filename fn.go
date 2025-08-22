@@ -120,6 +120,10 @@ func (f *Function) RunFunction(ctx context.Context, req *fnv1.RunFunctionRequest
 			return rsp, nil
 		}
 		f.log.Info("XR label processing completed successfully")
+		
+		// Set the modified XR into the desired state
+		response.SetDesiredCompositeResource(rsp, xr)
+		f.log.Info("Modified XR set in desired state")
 	}
 
 	// Parse fetch requests from function input and XR spec

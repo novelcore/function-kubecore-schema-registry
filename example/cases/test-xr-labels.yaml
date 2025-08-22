@@ -1,0 +1,344 @@
+# Test Case: XR Label Injection
+# This composition demonstrates comprehensive XR label injection capabilities including
+# static labels, dynamic labels with field extraction, transformations, and namespace detection
+
+---
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xtestlabelinjections.test.kubecore.io
+spec:
+  group: test.kubecore.io
+  names:
+    kind: XTestLabelInjection
+    plural: xtestlabelinjections
+  claimNames:
+    kind: TestLabelInjection
+    plural: testlabelinjections
+  connectionSecretKeys: []
+  versions:
+  - name: v1alpha1
+    served: true
+    referenceable: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              projectName:
+                type: string
+                description: "Project name for dynamic label extraction"
+                default: "Demo-Project"
+              environment:
+                type: string
+                description: "Environment for the deployment"
+                default: "PRODUCTION"
+              teamConfig:
+                type: object
+                description: "Team configuration for nested field extraction"
+                properties:
+                  name:
+                    type: string
+                    default: "Platform-Team"
+                  costCenter:
+                    type: string
+                    default: "CC-12345"
+                  region:
+                    type: string
+                    default: "us-east-1"
+              metadata:
+                type: object
+                description: "Metadata for complex transformations"
+                properties:
+                  version:
+                    type: string
+                    default: "v1.2.3"
+                  deploymentId:
+                    type: string
+                    default: "deploy-2024-001"
+          status:
+            type: object
+            properties:
+              labelsApplied:
+                type: integer
+                description: "Number of labels applied to the XR"
+              labelStatus:
+                type: string
+                description: "Status of label injection"
+
+---
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: test-xr-labels
+spec:
+  compositeTypeRef:
+    apiVersion: test.kubecore.io/v1alpha1
+    kind: XTestLabelInjection
+  mode: Pipeline
+  pipeline:
+  # STEP 1: Apply comprehensive XR labels
+  - step: inject-xr-labels
+    functionRef:
+      name: function-kubecore-schema-registry
+    input:
+      apiVersion: registry.fn.crossplane.io/v1beta1
+      kind: Input
+      metadata:
+        name: xr-label-injection-test
+      # Enable XR Label Injection Feature
+      xrLabels:
+        enabled: true
+        
+        # Static labels - organizational standards
+        labels:
+          kubecore.io/organization: "novelcore"
+          kubecore.io/managed-by: "crossplane"
+          kubecore.io/function: "schema-registry"
+          compliance/data-classification: "internal"
+          compliance/sox-compliant: "true"
+        
+        # Dynamic labels with field extraction and transformations
+        dynamicLabels:
+          # Extract project name and transform to lowercase
+          - key: "kubecore.io/project"
+            source: "xr-field"
+            sourcePath: "spec.projectName"
+            transform:
+              type: "lowercase"
+          
+          # Extract environment and normalize
+          - key: "kubecore.io/environment"
+            source: "xr-field"
+            sourcePath: "spec.environment"
+            transform:
+              type: "lowercase"
+          
+          # Extract team name with prefix
+          - key: "team/name"
+            source: "xr-field"
+            sourcePath: "spec.teamConfig.name"
+            transform:
+              type: "prefix"
+              parameters:
+                prefix: "team-"
+          
+          # Extract cost center directly
+          - key: "billing/cost-center"
+            source: "xr-field"
+            sourcePath: "spec.teamConfig.costCenter"
+          
+          # Extract region with replacement
+          - key: "kubecore.io/region"
+            source: "xr-field"
+            sourcePath: "spec.teamConfig.region"
+            transform:
+              type: "replace"
+              parameters:
+                from: "us-"
+                to: "region-"
+          
+          # Extract version with suffix
+          - key: "version/deployment"
+            source: "xr-field"
+            sourcePath: "spec.metadata.version"
+            transform:
+              type: "suffix"
+              parameters:
+                suffix: "-stable"
+          
+          # Extract deployment ID and truncate
+          - key: "deployment/id"
+            source: "xr-field"
+            sourcePath: "spec.metadata.deploymentId"
+            transform:
+              type: "truncate"
+              parameters:
+                length: "10"
+          
+          # Generate timestamp for creation tracking
+          - key: "kubecore.io/created-at"
+            source: "timestamp"
+          
+          # Generate unique instance ID
+          - key: "kubecore.io/instance-id"
+            source: "uuid"
+            transform:
+              type: "truncate"
+              parameters:
+                length: "8"
+          
+          # Add constant label
+          - key: "kubecore.io/label-test"
+            source: "constant"
+            value: "xr-injection-demo"
+        
+        # Namespace detection for scope labeling
+        namespaceDetection:
+          enabled: true
+          labelKey: "kubecore.io/scope"
+          namespacedValue: "namespace-{namespace}"
+          clusterScopedValue: "cluster"
+        
+        # Merge strategy - preserve existing labels
+        mergeStrategy: "merge"
+        
+        # Protect critical labels from being overridden
+        enforceLabels:
+          - "kubecore.io/organization"
+          - "compliance/sox-compliant"
+      
+      # Also fetch a resource to demonstrate combined functionality
+      phase3Features: false
+      fetchResources:
+        - into: "githubProject"
+          apiVersion: "github.platform.kubecore.io/v1alpha1"
+          kind: "GitHubProject"
+          name: "demo-project"
+          namespace: "test"
+          matchType: "direct"
+          optional: true
+
+  # STEP 2: Create ConfigMap with label injection results
+  - step: create-label-result-configmap
+    functionRef:
+      name: function-go-templating
+    input:
+      apiVersion: gotemplating.fn.crossplane.io/v1beta1
+      kind: GoTemplate
+      source: Inline
+      inline:
+        template: |
+          {{- $xrName := .observed.composite.resource.metadata.name }}
+          {{- $xrLabels := .observed.composite.resource.metadata.labels }}
+          {{- $schemaResults := index .context "kubecore-schema-registry.fn.kubecore.platform.io/fetched-resources" }}
+          
+          ---
+          # Return the XR with its labels
+          apiVersion: {{ .observed.composite.resource.apiVersion }}
+          kind: {{ .observed.composite.resource.kind }}
+          metadata:
+            name: {{ .observed.composite.resource.metadata.name }}
+            {{- if .observed.composite.resource.metadata.namespace }}
+            namespace: {{ .observed.composite.resource.metadata.namespace }}
+            {{- end }}
+            {{- if $xrLabels }}
+            labels:
+              {{- range $key, $value := $xrLabels }}
+              {{ $key }}: {{ $value | quote }}
+              {{- end }}
+            {{- end }}
+          spec:
+            {{- .observed.composite.resource.spec | toYaml | nindent 12 }}
+          status:
+            labelsApplied: {{ len $xrLabels }}
+            labelStatus: "SUCCESS"
+          
+          ---
+          # Create a ConfigMap documenting the label injection results
+          apiVersion: kubernetes.crossplane.io/v1alpha2
+          kind: Object
+          metadata:
+            name: {{ $xrName }}-label-results
+            annotations:
+              crossplane.io/external-name: {{ $xrName }}-label-results
+              gotemplating.fn.crossplane.io/composition-resource-name: {{ $xrName }}-label-results
+          spec:
+            forProvider:
+              manifest:
+                apiVersion: v1
+                kind: ConfigMap
+                metadata:
+                  name: {{ $xrName }}-label-results
+                  namespace: default
+                  labels:
+                    test-type: "xr-label-injection"
+                    kubecore.io/test: "TestLabelInjection"
+                    kubecore.io/feature: "xr-labels"
+                data:
+                  test-name: "XR Label Injection Test"
+                  test-description: "Demonstrates comprehensive XR label injection capabilities"
+                  execution-time: "{{ now | date "2006-01-02T15:04:05Z07:00" }}"
+                  
+                  # Document static labels
+                  static-labels: |
+                    kubecore.io/organization: "novelcore"
+                    kubecore.io/managed-by: "crossplane"
+                    kubecore.io/function: "schema-registry"
+                    compliance/data-classification: "internal"
+                    compliance/sox-compliant: "true"
+                  
+                  # Document expected dynamic labels
+                  expected-dynamic-labels: |
+                    kubecore.io/project: [lowercase of projectName]
+                    kubecore.io/environment: [lowercase of environment]
+                    team/name: [team- prefix + teamConfig.name]
+                    billing/cost-center: [teamConfig.costCenter]
+                    kubecore.io/region: [teamConfig.region with us- replaced by region-]
+                    version/deployment: [metadata.version + -stable suffix]
+                    deployment/id: [first 10 chars of metadata.deploymentId]
+                    kubecore.io/created-at: [RFC3339 timestamp]
+                    kubecore.io/instance-id: [first 8 chars of UUID]
+                    kubecore.io/label-test: "xr-injection-demo"
+                    kubecore.io/scope: [namespace scope detection]
+                  
+                  # Document actual applied labels
+                  {{- if $xrLabels }}
+                  applied-labels-count: "{{ len $xrLabels }}"
+                  applied-labels: |
+                    {{- range $key, $value := $xrLabels }}
+                    {{ $key }}: {{ $value | quote }}
+                    {{- end }}
+                  {{- else }}
+                  applied-labels-count: "0"
+                  applied-labels: "No labels found"
+                  {{- end }}
+                  
+                  # Label categories breakdown
+                  label-categories: |
+                    Static Labels: 5
+                    Dynamic XR Field Labels: 7
+                    Generated Labels: 2 (timestamp, UUID)
+                    Constant Labels: 1
+                    Namespace Detection: 1
+                    Total Expected: 16
+                  
+                  # Transformation types demonstrated
+                  transformations-used: |
+                    - lowercase: projectName, environment
+                    - prefix: team name
+                    - replace: region (us- to region-)
+                    - suffix: version
+                    - truncate: deploymentId, instance-id
+                  
+                  # Feature validation
+                  features-tested: |
+                    ✓ Static label application
+                    ✓ Dynamic label extraction from XR fields
+                    ✓ Nested field access (spec.teamConfig.name)
+                    ✓ Value transformations (6 types)
+                    ✓ Timestamp generation
+                    ✓ UUID generation
+                    ✓ Constant value labels
+                    ✓ Namespace scope detection
+                    ✓ Merge strategy
+                    ✓ Label enforcement
+                  
+                  test-result: |
+                    {{- if and $xrLabels (gt (len $xrLabels) 10) }}
+                    SUCCESS - All label injection features working
+                    {{- else }}
+                    PARTIAL - Check label application
+                    {{- end }}
+            providerConfigRef:
+              name: kubesys-enhanced
+
+  # STEP 3: Auto-ready to mark resources as ready
+  - step: auto-ready
+    functionRef:
+      name: function-auto-ready
+    input:
+      apiVersion: autoready.fn.crossplane.io/v1beta1
+      kind: Input

@@ -1,0 +1,22 @@
+# Claims for TestLabelCurrent - Works with current deployed function
+# Use these until the function package is updated with XR label injection support
+
+apiVersion: test.kubecore.io/v1alpha1
+kind: TestLabelCurrent
+metadata:
+  name: label-current-demo
+  namespace: default
+  labels:
+    existing-label: "should-be-preserved"
+    test-type: "xr-label-workaround"
+  annotations:
+    kubecore.io/description: "Demonstrates label application using go-templating workaround"
+spec:
+  projectName: "Demo-KubeCore-Project"
+  environment: "PRODUCTION"
+  teamConfig:
+    name: "Platform-Engineering"
+    costCenter: "CC-PLATFORM-2024"
+    region: "us-west-2"
+  compositionRef:
+    name: test-label-current

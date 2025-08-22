@@ -1,0 +1,49 @@
+apiVersion: platform.kubecore.io/v1alpha1
+kind: SoftwareLifecycle
+metadata:
+  name: sdlc-config
+  namespace: test
+  # internal composition labels, of X resoruce
+  labels:
+    platform.kubecore.io/type: health-check
+    platform.kubecore.io/implementation: argo
+spec:
+  # Reference to the KubeProject for which this SDLC configuration applies
+  # THe purpose is to match the SDLC configuration to the KubEnv resources
+  # Identity and Metadata
+  GithubProviderSelector:
+    enabled: true
+    selector:
+      matchLabels:
+        kubecore.io/organisation: novelcore
+        kubecore.io/component-type: sdlc
+
+  kubeProjectSelector:
+    enabled: true
+    selector:
+      matchLabels:
+        kubecore.io/kubeproject: demo-project
+        kubecore.io/component-type: sdlc
+
+  # THis can add specific labels to the Quality Gate Ref for identification (eg kubenv-type etc.). THat way we can identify the Quality Gate by its label on compositions that need to refference it.
+  qualityGateSelector:
+    enabled: true
+    selector:
+      matchLabels:
+        kubecore.io/quality-name: smoke-test-gate
+        kubecore.io/component-type: quality-gate
+    parameters:
+      timeout: "5m"
+      environment: "development"
+    
+  kebenvSelector:
+    enabled: true
+    # Selector to find KubEnv resources for this SDLC configuration  
+    selector:
+      matchLabels:
+        kubecore.io/kubenv-type: dev
+        kubecore.io/component-type: kubenv
+      parameters:
+        timeout: "5m"
+        environment: "development"
+    # Quality Gates for development environment

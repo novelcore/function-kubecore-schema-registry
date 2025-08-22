@@ -1,0 +1,201 @@
+# Test Case: XR Label Injection - Compatible with Current Deployed Function
+# This version works with the current deployed function that doesn't have XR label injection yet
+# Once the function is updated, use test-xr-labels.yaml instead
+
+---
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xtestlabelcurrents.test.kubecore.io
+spec:
+  group: test.kubecore.io
+  names:
+    kind: XTestLabelCurrent
+    plural: xtestlabelcurrents
+  claimNames:
+    kind: TestLabelCurrent
+    plural: testlabelcurrents
+  connectionSecretKeys: []
+  versions:
+  - name: v1alpha1
+    served: true
+    referenceable: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              projectName:
+                type: string
+                description: "Project name for testing"
+                default: "Demo-Project"
+              environment:
+                type: string
+                description: "Environment for the deployment"
+                default: "PRODUCTION"
+              teamConfig:
+                type: object
+                description: "Team configuration"
+                properties:
+                  name:
+                    type: string
+                    default: "Platform-Team"
+                  costCenter:
+                    type: string
+                    default: "CC-12345"
+                  region:
+                    type: string
+                    default: "us-east-1"
+          status:
+            type: object
+            properties:
+              resourcesFound:
+                type: integer
+                description: "Number of resources found"
+
+---
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: test-label-current
+spec:
+  compositeTypeRef:
+    apiVersion: test.kubecore.io/v1alpha1
+    kind: XTestLabelCurrent
+  mode: Pipeline
+  pipeline:
+  # STEP 1: Fetch resources without XR labels (current function version)
+  - step: fetch-resources
+    functionRef:
+      name: function-kubecore-schema-registry
+    input:
+      apiVersion: registry.fn.crossplane.io/v1beta1
+      kind: Input
+      metadata:
+        name: fetch-test
+      # No xrLabels field - compatible with current deployed function
+      phase3Features: false
+      fetchResources:
+        - into: "githubProject"
+          apiVersion: "github.platform.kubecore.io/v1alpha1"
+          kind: "GitHubProject"
+          name: "demo-project"
+          namespace: "test"
+          matchType: "direct"
+          optional: true
+
+  # STEP 2: Apply labels using go-templating instead
+  - step: apply-labels-via-templating
+    functionRef:
+      name: function-go-templating
+    input:
+      apiVersion: gotemplating.fn.crossplane.io/v1beta1
+      kind: GoTemplate
+      source: Inline
+      inline:
+        template: |
+          {{- $xrName := .observed.composite.resource.metadata.name }}
+          {{- $xrNamespace := .observed.composite.resource.metadata.namespace }}
+          {{- $projectName := .observed.composite.resource.spec.projectName | lower }}
+          {{- $environment := .observed.composite.resource.spec.environment | lower }}
+          {{- $teamName := printf "team-%s" .observed.composite.resource.spec.teamConfig.name }}
+          {{- $costCenter := .observed.composite.resource.spec.teamConfig.costCenter }}
+          {{- $region := .observed.composite.resource.spec.teamConfig.region | replace "us-" "region-" }}
+          {{- $timestamp := now | date "2006-01-02T15:04:05Z07:00" }}
+          
+          ---
+          # Apply labels to the XR
+          apiVersion: {{ .observed.composite.resource.apiVersion }}
+          kind: {{ .observed.composite.resource.kind }}
+          metadata:
+            name: {{ .observed.composite.resource.metadata.name }}
+            {{- if $xrNamespace }}
+            namespace: {{ $xrNamespace }}
+            {{- end }}
+            labels:
+              # Preserve existing labels
+              {{- range $key, $value := .observed.composite.resource.metadata.labels }}
+              {{ $key }}: {{ $value | quote }}
+              {{- end }}
+              
+              # Static organizational labels
+              kubecore.io/organization: "novelcore"
+              kubecore.io/managed-by: "crossplane"
+              kubecore.io/function: "schema-registry"
+              compliance/data-classification: "internal"
+              compliance/sox-compliant: "true"
+              
+              # Dynamic labels (simulating XR label injection)
+              kubecore.io/project: {{ $projectName | quote }}
+              kubecore.io/environment: {{ $environment | quote }}
+              team/name: {{ $teamName | quote }}
+              billing/cost-center: {{ $costCenter | quote }}
+              kubecore.io/region: {{ $region | quote }}
+              kubecore.io/created-at: {{ $timestamp | quote }}
+              kubecore.io/label-test: "manual-injection"
+              
+              # Namespace scope
+              {{- if $xrNamespace }}
+              kubecore.io/scope: "namespace-{{ $xrNamespace }}"
+              {{- else }}
+              kubecore.io/scope: "cluster"
+              {{- end }}
+          spec:
+            {{- .observed.composite.resource.spec | toYaml | nindent 12 }}
+          
+          ---
+          # Create a ConfigMap documenting the label application
+          apiVersion: kubernetes.crossplane.io/v1alpha2
+          kind: Object
+          metadata:
+            name: {{ $xrName }}-label-results
+            annotations:
+              crossplane.io/external-name: {{ $xrName }}-label-results
+              gotemplating.fn.crossplane.io/composition-resource-name: {{ $xrName }}-label-results
+          spec:
+            forProvider:
+              manifest:
+                apiVersion: v1
+                kind: ConfigMap
+                metadata:
+                  name: {{ $xrName }}-label-results
+                  namespace: default
+                  labels:
+                    test-type: "xr-label-workaround"
+                    kubecore.io/test: "TestLabelCurrent"
+                data:
+                  test-name: "XR Label Injection Workaround"
+                  test-description: "Demonstrates label injection using go-templating as workaround"
+                  execution-time: {{ $timestamp | quote }}
+                  
+                  labels-applied: |
+                    kubecore.io/organization: "novelcore"
+                    kubecore.io/managed-by: "crossplane"
+                    kubecore.io/function: "schema-registry"
+                    compliance/data-classification: "internal"
+                    compliance/sox-compliant: "true"
+                    kubecore.io/project: {{ $projectName | quote }}
+                    kubecore.io/environment: {{ $environment | quote }}
+                    team/name: {{ $teamName | quote }}
+                    billing/cost-center: {{ $costCenter | quote }}
+                    kubecore.io/region: {{ $region | quote }}
+                    kubecore.io/created-at: {{ $timestamp | quote }}
+                    kubecore.io/label-test: "manual-injection"
+                    kubecore.io/scope: "namespace-{{ $xrNamespace | default "default" }}"
+                  
+                  note: |
+                    This composition uses go-templating to apply labels as a workaround
+                    until the function package is updated with XR label injection support.
+                    Once updated, use test-xr-labels.yaml for native label injection.
+            providerConfigRef:
+              name: kubesys-enhanced
+
+  # STEP 3: Auto-ready
+  - step: auto-ready
+    functionRef:
+      name: function-auto-ready
+    input:
+      apiVersion: autoready.fn.crossplane.io/v1beta1
+      kind: Input

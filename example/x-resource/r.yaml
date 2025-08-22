@@ -1,10 +1,53 @@
-# Test Case 1: Reference Resolution Bug Fix Validation
-apiVersion: test.kubecore.platform.io/v1alpha1
-kind: XReferenceResolutionTest
+# Test Case 1: Basic Static Labels
+apiVersion: test.kubecore.io/v1alpha1
+kind: XTestLabelInjection
 metadata:
-  name: reference-resolution-fix-test
+  name: test-static-labels
+  namespace: test-namespace
+spec:
+  testScenario: "static"
+  environment: "production"
+  region: "us-west-2"
+  team: "devops"
+  customValue: "custom-test-value"
+
+---
+# Test Case 2: Dynamic Labels with Transformations  
+apiVersion: test.kubecore.io/v1alpha1
+kind: XTestLabelInjection
+metadata:
+  name: test-dynamic-labels
   namespace: default
 spec:
-  testName: "reference-resolution-bug-fix"
-  expectedResources: 2
-  maxDepth: 3
+  testScenario: "dynamic"
+  environment: "STAGING"
+  region: "us-east-1"
+  team: "backend"
+  customValue: "transform-me"
+
+---
+# Test Case 3: Namespace Detection (cluster-scoped)
+apiVersion: test.kubecore.io/v1alpha1
+kind: XTestLabelInjection
+metadata:
+  name: test-namespace-detection
+spec:
+  testScenario: "namespace"
+  environment: "dev"
+  region: "us-central-1"
+  team: "frontend"
+  customValue: "scope-test"
+
+---
+# Test Case 4: Combined Features
+apiVersion: test.kubecore.io/v1alpha1
+kind: XTestLabelInjection
+metadata:
+  name: test-combined-features
+  namespace: complex-namespace
+spec:
+  testScenario: "combined"
+  environment: "integration"
+  region: "us-south-1"
+  team: "qa"
+  customValue: "complex-scenario"

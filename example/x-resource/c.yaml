@@ -1,16 +1,19 @@
-# XRD Definition for Reference Resolution Bug Fix Validation
+# XResource Label Injection Test Composition
+# Tests the complete XResource Label Injection feature with multiple scenarios
+
 apiVersion: apiextensions.crossplane.io/v1
 kind: CompositeResourceDefinition
 metadata:
-  name: xreferenceresolutiontests.test.kubecore.platform.io
+  name: xtestlabelinjections.test.kubecore.io
 spec:
-  group: test.kubecore.platform.io
+  group: test.kubecore.io
   names:
-    kind: XReferenceResolutionTest
-    plural: xreferenceresolutiontests
+    kind: XTestLabelInjection
+    plural: xtestlabelinjections
   claimNames:
-    kind: ReferenceResolutionTest
-    plural: referenceresolutiontests
+    kind: TestLabelInjection
+    plural: testlabelinjections
+  connectionSecretKeys: []
   versions:
   - name: v1alpha1
     served: true
@@ -22,99 +25,207 @@ spec:
           spec:
             type: object
             properties:
-              testName:
+              testScenario:
                 type: string
-                description: "Name of the reference resolution test"
-              expectedResources:
-                type: integer
-                description: "Expected number of resources to discover"
-                default: 2
-              maxDepth:
-                type: integer
-                description: "Maximum traversal depth"
-                default: 3
-            required:
-            - testName
+                description: "Test scenario to execute"
+                enum: ["static", "dynamic", "namespace", "combined"]
+                default: "static"
+              environment:
+                type: string
+                description: "Environment for testing"
+                default: "test"
+              region:
+                type: string
+                description: "Region for testing"
+                default: "us-east-1"
+              team:
+                type: string
+                description: "Team name for testing"
+                default: "platform"
+              customValue:
+                type: string
+                description: "Custom value for dynamic labels"
+                default: "test-value"
           status:
             type: object
             properties:
-              fetchSummary:
+              labelProcessingStatus:
+                type: string
+              appliedLabels:
                 type: object
-                properties:
-                  totalRequested:
-                    type: integer
-                  successful:
-                    type: integer
-                  failed:
-                    type: integer
-                  skipped:
-                    type: integer
-                  executionTime:
-                    type: string
-              referenceResolutionResults:
-                type: object
-                properties:
-                  discoveredResources:
-                    type: integer
-                    description: "Total resources discovered"
-                  maxDepthReached:
-                    type: integer
-                    description: "Maximum depth reached"
-                  referencesResolved:
-                    type: integer
-                    description: "Number of references successfully resolved"
-                  testStatus:
-                    type: string
-                    enum: ["PASS", "FAIL", "PARTIAL"]
-                  executionTime:
-                    type: string
-                    description: "Test execution duration"
+                additionalProperties:
+                  type: string
+
 ---
-# Reference Resolution Bug Fix Test Composition
 apiVersion: apiextensions.crossplane.io/v1
 kind: Composition
 metadata:
-  name: xreferenceresolutiontest.test.kubecore.platform.io
+  name: test-label-injection
 spec:
   compositeTypeRef:
-    apiVersion: test.kubecore.platform.io/v1alpha1
-    kind: XReferenceResolutionTest
-
+    apiVersion: test.kubecore.io/v1alpha1
+    kind: XTestLabelInjection
   mode: Pipeline
-
   pipeline:
-  # SINGLE FOCUSED TEST: GitHubProject -> GithubProvider Reference Resolution
-  - step: test-reference-resolution-fix
+  # Test basic static labels
+  - step: test-static-labels
     functionRef:
       name: function-kubecore-schema-registry
     input:
       apiVersion: registry.fn.crossplane.io/v1beta1
       kind: Input
+      metadata:
+        name: static-labels-test
+      # Enable Phase 3 for XR label injection
       phase3Features: true
-      fetchTimeout: "30s"
-      maxConcurrentFetches: 5
-      fetchResources:
-      - into: "rootProject"
-        name: "demo-project"
-        namespace: "test"
-        apiVersion: "github.platform.kubecore.io/v1alpha1"
-        kind: "GitHubProject"
-        matchType: "direct"
-      traversalConfig:
+      xrLabels:
         enabled: true
-        maxDepth: 3
-        maxResources: 50
-        timeout: "30s"
-        direction: "forward"
-        scopeFilter:
-          platformOnly: true
-          includeAPIGroups:
-            - "github.platform.kubecore.io"
-          crossNamespaceEnabled: true
-        referenceResolution:
-          enableDynamicCRDs: true
-          followCustomReferences: true
-          minConfidenceThreshold: 0.5
-        performance:
-          enableMetrics: true
-          resourceDeduplication: true
+        staticLabels:
+          kubecore.io/test: "label-injection"
+          environment: "test"
+          team: "platform"
+          test-type: "static"
+        mergeStrategy: "merge"
+        
+  # Test dynamic labels with field extraction
+  - step: test-dynamic-labels  
+    functionRef:
+      name: function-kubecore-schema-registry
+    input:
+      apiVersion: registry.fn.crossplane.io/v1beta1
+      kind: Input
+      metadata:
+        name: dynamic-labels-test
+      phase3Features: true
+      xrLabels:
+        enabled: true
+        dynamicLabels:
+          - name: "kubecore.io/environment"
+            source: "spec.environment"
+            transforms:
+              - type: "lowercase"
+          - name: "kubecore.io/region"  
+            source: "spec.region"
+            transforms:
+              - type: "replace"
+                find: "us-"
+                replace: "region-"
+          - name: "kubecore.io/team"
+            source: "spec.team"
+            transforms:
+              - type: "prefix"
+                value: "team-"
+          - name: "kubecore.io/custom"
+            source: "spec.customValue"
+            transforms:
+              - type: "suffix"
+                value: "-processed"
+        mergeStrategy: "merge"
+        
+  # Test namespace detection
+  - step: test-namespace-detection
+    functionRef:
+      name: function-kubecore-schema-registry
+    input:
+      apiVersion: registry.fn.crossplane.io/v1beta1
+      kind: Input  
+      metadata:
+        name: namespace-detection-test
+      phase3Features: true
+      xrLabels:
+        enabled: true
+        namespaceDetection:
+          enabled: true
+          labelKey: "kubecore.io/scope"
+        mergeStrategy: "merge"
+        
+  # Test combined features with replace strategy
+  - step: test-combined-features
+    functionRef:
+      name: function-kubecore-schema-registry
+    input:
+      apiVersion: registry.fn.crossplane.io/v1beta1
+      kind: Input
+      metadata:
+        name: combined-features-test
+      phase3Features: true  
+      xrLabels:
+        enabled: true
+        staticLabels:
+          kubecore.io/test: "combined"
+          managed-by: "kubecore"
+        dynamicLabels:
+          - name: "kubecore.io/scenario"
+            source: "spec.testScenario"
+            transforms:
+              - type: "uppercase"
+          - name: "kubecore.io/env-team"
+            source: "spec.environment"
+            transforms:
+              - type: "template"
+                template: "{{.}}-{{.spec.team}}"
+        namespaceDetection:
+          enabled: true
+          labelKey: "kubecore.io/scope"
+        mergeStrategy: "replace"
+        
+  # Create a simple resource to complete the composition
+  - step: create-configmap-result
+    functionRef:
+      name: function-go-templating
+    input:
+      apiVersion: gotemplating.fn.crossplane.io/v1beta1
+      kind: GoTemplate
+      source: Inline
+      inline:
+        template: |
+          {{- $testName := .observed.composite.resource.metadata.name }}
+          {{- $labels := .observed.composite.resource.metadata.labels }}
+          
+          ---
+          apiVersion: kubernetes.crossplane.io/v1alpha2
+          kind: Object
+          metadata:
+            name: {{ $testName }}-label-injection-result
+            annotations:
+              crossplane.io/external-name: test-label-injection-result
+              gotemplating.fn.crossplane.io/composition-resource-name: {{ $testName }}-label-injection-result
+          spec:
+            forProvider:
+              manifest:
+                apiVersion: v1
+                kind: ConfigMap
+                metadata:
+                  name: test-label-injection-result
+                  namespace: default
+                  labels:
+                    test-type: "label-injection"
+                    kubecore.io/test: "XResourceLabelInjection"
+                data:
+                  test-name: "{{ $testName }}"
+                  test-type: "XResource Label Injection"
+                  test-description: "Validates XR label injection functionality"
+                  execution-time: "{{ now | date "2006-01-02T15:04:05Z07:00" }}"
+                  {{- if $labels }}
+                  applied-labels: |
+                    {{- range $key, $value := $labels }}
+                    {{ $key }}: "{{ $value }}"
+                    {{- end }}
+                  label-count: "{{ len $labels }}"
+                  test-result: "SUCCESS"
+                  {{- else }}
+                  applied-labels: "none"
+                  label-count: "0"
+                  test-result: "FAILED"
+                  error: "No labels found on XR"
+                  {{- end }}
+            providerConfigRef:
+              name: kubesys-enhanced
+              
+  # Auto-ready
+  - step: auto-ready
+    functionRef:
+      name: function-auto-ready
+    input:
+      apiVersion: autoready.fn.crossplane.io/v1beta1
+      kind: Input

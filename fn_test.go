@@ -10,6 +10,7 @@ import (
 
 	"github.com/crossplane/function-sdk-go/logging"
 	fnv1 "github.com/crossplane/function-sdk-go/proto/v1"
+	"github.com/crossplane/function-sdk-go/request"
 	"github.com/crossplane/function-sdk-go/resource"
 
 	"github.com/crossplane/function-kubecore-schema-registry/input/v1beta1"
@@ -870,14 +871,16 @@ func TestXRLabelInjection(t *testing.T) {
 
 			// Check desired XR labels if requested
 			if tc.checkDesiredXR && rsp.Desired != nil && rsp.Desired.Composite != nil {
-				// Convert to Unstructured to access labels
-				desired := &unstructured.Unstructured{}
-				if err := desired.UnmarshalJSON([]byte(rsp.Desired.Composite.Resource.String())); err != nil {
-					t.Errorf("%s\nFailed to unmarshal desired XR: %v", tc.reason, err)
+				// Use the function SDK to get the desired composite resource
+				dxr, err := request.GetDesiredCompositeResource(&fnv1.RunFunctionRequest{
+					Desired: rsp.Desired,
+				})
+				if err != nil {
+					t.Errorf("%s\nFailed to get desired XR: %v", tc.reason, err)
 					return
 				}
 				
-				desiredLabels := desired.GetLabels()
+				desiredLabels := dxr.Resource.GetLabels()
 				if desiredLabels == nil {
 					desiredLabels = make(map[string]string)
 				}
