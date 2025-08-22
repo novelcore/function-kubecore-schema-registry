@@ -50,8 +50,15 @@ func TestXRLabelIntegration(t *testing.T) {
 			}`,
 			expectError: false,
 			checkLabels: func(t *testing.T, xr map[string]interface{}) {
-				metadata := xr["metadata"].(map[string]interface{})
-				labels := metadata["labels"].(map[string]interface{})
+				metadata, ok := xr["metadata"].(map[string]interface{})
+				require.True(t, ok, "metadata should be a map[string]interface{}")
+				
+				labelsInterface, exists := metadata["labels"]
+				require.True(t, exists, "labels should exist in metadata")
+				require.NotNil(t, labelsInterface, "labels should not be nil")
+				
+				labels, ok := labelsInterface.(map[string]interface{})
+				require.True(t, ok, "labels should be a map[string]interface{}")
 				
 				// Should have merged labels
 				assert.Equal(t, "value", labels["existing"])
@@ -96,8 +103,15 @@ func TestXRLabelIntegration(t *testing.T) {
 			}`,
 			expectError: false,
 			checkLabels: func(t *testing.T, xr map[string]interface{}) {
-				metadata := xr["metadata"].(map[string]interface{})
-				labels := metadata["labels"].(map[string]interface{})
+				metadata, ok := xr["metadata"].(map[string]interface{})
+				require.True(t, ok, "metadata should be a map[string]interface{}")
+				
+				labelsInterface, exists := metadata["labels"]
+				require.True(t, exists, "labels should exist in metadata")
+				require.NotNil(t, labelsInterface, "labels should not be nil")
+				
+				labels, ok := labelsInterface.(map[string]interface{})
+				require.True(t, ok, "labels should be a map[string]interface{}")
 				
 				assert.Equal(t, "production-cluster", labels["xr-name"])
 				assert.Equal(t, "us-west-2", labels["region"])
@@ -144,8 +158,15 @@ func TestXRLabelIntegration(t *testing.T) {
 			}`,
 			expectError: false,
 			checkLabels: func(t *testing.T, xr map[string]interface{}) {
-				metadata := xr["metadata"].(map[string]interface{})
-				labels := metadata["labels"].(map[string]interface{})
+				metadata, ok := xr["metadata"].(map[string]interface{})
+				require.True(t, ok, "metadata should be a map[string]interface{}")
+				
+				labelsInterface, exists := metadata["labels"]
+				require.True(t, exists, "labels should exist in metadata")
+				require.NotNil(t, labelsInterface, "labels should not be nil")
+				
+				labels, ok := labelsInterface.(map[string]interface{})
+				require.True(t, ok, "labels should be a map[string]interface{}")
 				
 				assert.Equal(t, "production-cluster", labels["xr-name-lower"])
 				assert.Equal(t, "managed-Production-Cluster", labels["prefixed-name"])
@@ -183,8 +204,15 @@ func TestXRLabelIntegration(t *testing.T) {
 			}`,
 			expectError: false,
 			checkLabels: func(t *testing.T, xr map[string]interface{}) {
-				metadata := xr["metadata"].(map[string]interface{})
-				labels := metadata["labels"].(map[string]interface{})
+				metadata, ok := xr["metadata"].(map[string]interface{})
+				require.True(t, ok, "metadata should be a map[string]interface{}")
+				
+				labelsInterface, exists := metadata["labels"]
+				require.True(t, exists, "labels should exist in metadata")
+				require.NotNil(t, labelsInterface, "labels should not be nil")
+				
+				labels, ok := labelsInterface.(map[string]interface{})
+				require.True(t, ok, "labels should be a map[string]interface{}")
 				
 				assert.Equal(t, "crossplane", labels["managed-by"])
 				assert.Equal(t, "production", labels["environment"])
@@ -216,8 +244,15 @@ func TestXRLabelIntegration(t *testing.T) {
 			}`,
 			expectError: false,
 			checkLabels: func(t *testing.T, xr map[string]interface{}) {
-				metadata := xr["metadata"].(map[string]interface{})
-				labels := metadata["labels"].(map[string]interface{})
+				metadata, ok := xr["metadata"].(map[string]interface{})
+				require.True(t, ok, "metadata should be a map[string]interface{}")
+				
+				labelsInterface, exists := metadata["labels"]
+				require.True(t, exists, "labels should exist in metadata")
+				require.NotNil(t, labelsInterface, "labels should not be nil")
+				
+				labels, ok := labelsInterface.(map[string]interface{})
+				require.True(t, ok, "labels should be a map[string]interface{}")
 				
 				assert.Equal(t, "production", labels["kubecore.io/namespace"])
 			},
@@ -244,11 +279,14 @@ func TestXRLabelIntegration(t *testing.T) {
 			}`,
 			expectError: false,
 			checkLabels: func(t *testing.T, xr map[string]interface{}) {
-				metadata := xr["metadata"].(map[string]interface{})
-				// Should not have labels added
-				if labels, exists := metadata["labels"]; exists {
-					labelsMap := labels.(map[string]interface{})
-					assert.NotContains(t, labelsMap, "should")
+				metadata, ok := xr["metadata"].(map[string]interface{})
+				require.True(t, ok, "metadata should be a map[string]interface{}")
+				
+				// Should not have labels added when XR labels are disabled
+				if labelsInterface, exists := metadata["labels"]; exists && labelsInterface != nil {
+					labels, ok := labelsInterface.(map[string]interface{})
+					require.True(t, ok, "labels should be a map[string]interface{}")
+					assert.NotContains(t, labels, "should", "should not contain labels when XR labels are disabled")
 				}
 			},
 		},
@@ -282,11 +320,15 @@ func TestXRLabelIntegration(t *testing.T) {
 
 			// Check that XR has been modified with labels
 			if tt.checkLabels != nil {
-				// The XR should be modified in the observed state
-				// In a real function, this would be reflected in the desired state
-				// For this test, we verify the XR modification logic  
-				xrObj := req.Observed.Composite.Resource.AsMap()
-				tt.checkLabels(t, xrObj)
+				// For enabled cases, check the desired state
+				if rsp.Desired != nil && rsp.Desired.Composite != nil && rsp.Desired.Composite.Resource != nil {
+					xrObj := rsp.Desired.Composite.Resource.AsMap()
+					tt.checkLabels(t, xrObj)
+				} else {
+					// For disabled case, check the original observed XR
+					xrObj := req.Observed.Composite.Resource.AsMap()
+					tt.checkLabels(t, xrObj)
+				}
 			}
 		})
 	}
@@ -317,15 +359,17 @@ func (f testableFunction) RunFunction(ctx context.Context, req *fnv1.RunFunction
 		return nil, err
 	}
 
+	// Return minimal successful response
+	rsp := response.To(req, response.DefaultTTL)
+
 	// Process XR label injection if enabled
 	if in.XRLabels != nil && in.XRLabels.Enabled {
 		if err := f.processor.ProcessLabels(ctx, observedXR, in.XRLabels); err != nil {
 			return nil, err
 		}
+		// Set the modified XR in the desired state
+		response.SetDesiredCompositeResource(rsp, observedXR)
 	}
-
-	// Return minimal successful response
-	rsp := response.To(req, response.DefaultTTL)
 
 	return rsp, nil
 }
