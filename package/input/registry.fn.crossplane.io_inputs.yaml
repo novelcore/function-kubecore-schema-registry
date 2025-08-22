@@ -544,7 +544,7 @@ spec:
                   properties:
                     key:
                       description: Key is the label key to set
-                      pattern: ^[a-z0-9A-Z]([a-z0-9A-Z._-]*[a-z0-9A-Z])?$
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*\/)?([a-zA-Z0-9][-a-zA-Z0-9_.]*)?[a-zA-Z0-9]$
                       type: string
                     required:
                       default: false
@@ -673,7 +673,7 @@ spec:
                   labelKey:
                     default: kubecore.io/namespace
                     description: LabelKey is the label key to use for namespace information
-                    pattern: ^[a-z0-9A-Z]([a-z0-9A-Z._-]*[a-z0-9A-Z])?$
+                    pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*\/)?([a-zA-Z0-9][-a-zA-Z0-9_.]*)?[a-zA-Z0-9]$
                     type: string
                   strategy:
                     default: auto

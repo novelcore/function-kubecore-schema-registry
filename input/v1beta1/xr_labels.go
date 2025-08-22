@@ -30,7 +30,7 @@ type XRLabelConfig struct {
 type DynamicLabel struct {
 	// Key is the label key to set
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Pattern="^[a-z0-9A-Z]([a-z0-9A-Z._-]*[a-z0-9A-Z])?$"
+	// +kubebuilder:validation:Pattern="^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*\\/)?([a-zA-Z0-9][-a-zA-Z0-9_.]*)?[a-zA-Z0-9]$"
 	Key string `json:"key"`
 
 	// Source defines where the label value comes from
@@ -139,7 +139,7 @@ type NamespaceDetection struct {
 
 	// LabelKey is the label key to use for namespace information
 	// +kubebuilder:default="kubecore.io/namespace"
-	// +kubebuilder:validation:Pattern="^[a-z0-9A-Z]([a-z0-9A-Z._-]*[a-z0-9A-Z])?$"
+	// +kubebuilder:validation:Pattern="^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*\\/)?([a-zA-Z0-9][-a-zA-Z0-9_.]*)?[a-zA-Z0-9]$"
 	LabelKey string `json:"labelKey,omitempty"`
 
 	// Strategy defines how namespace is determined
