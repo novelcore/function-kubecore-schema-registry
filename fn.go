@@ -8,6 +8,7 @@ import (
 	"github.com/crossplane/function-sdk-go/logging"
 	fnv1 "github.com/crossplane/function-sdk-go/proto/v1"
 	"github.com/crossplane/function-sdk-go/request"
+	"github.com/crossplane/function-sdk-go/resource"
 	"github.com/crossplane/function-sdk-go/response"
 	"k8s.io/client-go/rest"
 
@@ -121,9 +122,29 @@ func (f *Function) RunFunction(ctx context.Context, req *fnv1.RunFunctionRequest
 		}
 		f.log.Info("XR label processing completed successfully")
 		
-		// Set the modified XR into the desired state
-		response.SetDesiredCompositeResource(rsp, xr)
-		f.log.Info("Modified XR set in desired state")
+		// Create a clean desired XR without problematic metadata fields
+		desiredXR := &resource.Composite{
+			Resource: xr.Resource.DeepCopy(),
+		}
+		
+		// Clear problematic fields that should not be in desired state
+		desiredXR.Resource.SetManagedFields(nil)
+		desiredXR.Resource.SetResourceVersion("")
+		desiredXR.Resource.SetUID("")
+		desiredXR.Resource.SetGeneration(0)
+		
+		// Remove creation timestamp and other metadata fields safely
+		if metadata, ok := desiredXR.Resource.Object["metadata"].(map[string]interface{}); ok {
+			delete(metadata, "creationTimestamp")
+			delete(metadata, "resourceVersion")
+			delete(metadata, "uid")
+			delete(metadata, "generation")
+			delete(metadata, "managedFields")
+		}
+		
+		// Set the cleaned XR into the desired state
+		response.SetDesiredCompositeResource(rsp, desiredXR)
+		f.log.Info("Modified XR set in desired state (cleaned)")
 	}
 
 	// Parse fetch requests from function input and XR spec

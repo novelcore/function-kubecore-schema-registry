@@ -1,0 +1,200 @@
+# Simple XR Label Injection Test - Updated Schema
+# This example demonstrates basic XR label injection with the updated schema
+
+---
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xsimplelabels.test.kubecore.io
+spec:
+  group: test.kubecore.io
+  names:
+    kind: XSimpleLabel
+    plural: xsimplelabels
+  claimNames:
+    kind: SimpleLabel
+    plural: simplelabels
+  connectionSecretKeys: []
+  versions:
+  - name: v1alpha1
+    served: true
+    referenceable: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              projectName:
+                type: string
+                description: "Project name"
+                default: "test-project"
+              environment:
+                type: string
+                description: "Environment"
+                default: "production"
+          status:
+            type: object
+            properties:
+              labelCount:
+                type: integer
+
+---
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: simple-labels
+spec:
+  compositeTypeRef:
+    apiVersion: test.kubecore.io/v1alpha1
+    kind: XSimpleLabel
+  mode: Pipeline
+  pipeline:
+  # STEP 1: Apply XR labels using the updated schema
+  - step: apply-xr-labels
+    functionRef:
+      name: function-kubecore-schema-registry
+    input:
+      apiVersion: registry.fn.crossplane.io/v1beta1
+      kind: Input
+      # XR Label Configuration with Updated Schema
+      xrLabels:
+        enabled: true
+        
+        # Static labels
+        labels:
+          kubecore.io/organization: "novelcore"
+          kubecore.io/managed-by: "crossplane"
+          environment: "test"
+        
+        # Dynamic labels with updated schema
+        dynamicLabels:
+          # Extract project name and make lowercase
+          - key: "kubecore.io/project"
+            source: "xr-field"
+            sourcePath: "spec.projectName"
+            transform:
+              type: "lowercase"
+            required: false
+          
+          # Extract environment and add prefix
+          - key: "kubecore.io/env-prefixed"
+            source: "xr-field"
+            sourcePath: "spec.environment"
+            transform:
+              type: "prefix"
+              options:
+                prefix: "env-"
+            required: false
+          
+          # Add timestamp
+          - key: "kubecore.io/created"
+            source: "timestamp"
+            required: false
+          
+          # Add constant
+          - key: "kubecore.io/test-type"
+            source: "constant"
+            value: "simple-label-test"
+            required: false
+        
+        # Namespace detection
+        namespaceDetection:
+          enabled: true
+          labelKey: "kubecore.io/scope"
+          strategy: "auto"
+          fallbackStrategy: "function-namespace"
+        
+        # Merge with existing labels
+        mergeStrategy: "merge"
+      
+      # No resource fetching for this simple test
+      fetchResources: []
+
+  # STEP 2: Create result ConfigMap
+  - step: create-result
+    functionRef:
+      name: function-go-templating
+    input:
+      apiVersion: gotemplating.fn.crossplane.io/v1beta1
+      kind: GoTemplate
+      source: Inline
+      inline:
+        template: |
+          {{- $xrName := .observed.composite.resource.metadata.name }}
+          {{- $xrLabels := .observed.composite.resource.metadata.labels }}
+          
+          ---
+          # Return the labeled XR
+          apiVersion: {{ .observed.composite.resource.apiVersion }}
+          kind: {{ .observed.composite.resource.kind }}
+          metadata:
+            name: {{ .observed.composite.resource.metadata.name }}
+            {{- if .observed.composite.resource.metadata.namespace }}
+            namespace: {{ .observed.composite.resource.metadata.namespace }}
+            {{- end }}
+            {{- if $xrLabels }}
+            labels:
+              {{- range $key, $value := $xrLabels }}
+              {{ $key }}: {{ $value | quote }}
+              {{- end }}
+            {{- end }}
+          spec:
+            {{- .observed.composite.resource.spec | toYaml | nindent 12 }}
+          status:
+            labelCount: {{ len $xrLabels }}
+          
+          ---
+          # Create ConfigMap with results
+          apiVersion: kubernetes.crossplane.io/v1alpha2
+          kind: Object
+          metadata:
+            name: {{ $xrName }}-simple-labels
+            annotations:
+              crossplane.io/external-name: {{ $xrName }}-simple-labels
+              gotemplating.fn.crossplane.io/composition-resource-name: {{ $xrName }}-simple-labels
+          spec:
+            forProvider:
+              manifest:
+                apiVersion: v1
+                kind: ConfigMap
+                metadata:
+                  name: {{ $xrName }}-simple-labels
+                  namespace: default
+                  labels:
+                    test-type: "simple-xr-labels"
+                data:
+                  test-name: "Simple XR Label Injection"
+                  execution-time: "{{ now | date "2006-01-02T15:04:05Z07:00" }}"
+                  
+                  {{- if $xrLabels }}
+                  labels-applied: "{{ len $xrLabels }}"
+                  label-list: |
+                    {{- range $key, $value := $xrLabels }}
+                    {{ $key }}: {{ $value }}
+                    {{- end }}
+                  {{- else }}
+                  labels-applied: "0"
+                  label-list: "No labels found"
+                  {{- end }}
+                  
+                  expected-labels: |
+                    kubecore.io/organization: novelcore
+                    kubecore.io/managed-by: crossplane
+                    environment: test
+                    kubecore.io/project: [spec.projectName in lowercase]
+                    kubecore.io/env-prefixed: [env- + spec.environment]
+                    kubecore.io/created: [timestamp]
+                    kubecore.io/test-type: simple-label-test
+                    kubecore.io/scope: [namespace detection result]
+            providerConfigRef:
+              name: kubesys-enhanced
+
+  # STEP 3: Auto ready
+  - step: auto-ready
+    functionRef:
+      name: function-auto-ready
+    input:
+      apiVersion: autoready.fn.crossplane.io/v1beta1
+      kind: Input

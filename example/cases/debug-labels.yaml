@@ -1,0 +1,100 @@
+# Debug XR Label Injection - Check if function recognizes xrLabels
+
+---
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xdebuglabels.test.kubecore.io
+spec:
+  group: test.kubecore.io
+  names:
+    kind: XDebugLabel
+    plural: xdebuglabels
+  claimNames:
+    kind: DebugLabel
+    plural: debuglabels
+  connectionSecretKeys: []
+  versions:
+  - name: v1alpha1
+    served: true
+    referenceable: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              testField:
+                type: string
+                default: "test-value"
+          status:
+            type: object
+            properties:
+              debug:
+                type: string
+
+---
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: debug-labels
+spec:
+  compositeTypeRef:
+    apiVersion: test.kubecore.io/v1alpha1
+    kind: XDebugLabel
+  mode: Pipeline
+  pipeline:
+  # STEP 1: Test XR Labels (this will fail if function doesn't have the feature)
+  - step: test-xr-labels
+    functionRef:
+      name: function-kubecore-schema-registry
+    input:
+      apiVersion: registry.fn.crossplane.io/v1beta1
+      kind: Input
+      # This will cause an error if the function doesn't recognize xrLabels
+      xrLabels:
+        enabled: true
+        labels:
+          debug-test: "function-has-xr-labels"
+      fetchResources: []
+
+  # STEP 2: Simple result
+  - step: create-debug-result
+    functionRef:
+      name: function-go-templating
+    input:
+      apiVersion: gotemplating.fn.crossplane.io/v1beta1
+      kind: GoTemplate
+      source: Inline
+      inline:
+        template: |
+          ---
+          apiVersion: {{ .observed.composite.resource.apiVersion }}
+          kind: {{ .observed.composite.resource.kind }}
+          metadata:
+            name: {{ .observed.composite.resource.metadata.name }}
+            {{- if .observed.composite.resource.metadata.labels }}
+            labels:
+              {{- range $key, $value := .observed.composite.resource.metadata.labels }}
+              {{ $key }}: {{ $value | quote }}
+              {{- end }}
+            {{- end }}
+          spec:
+            {{- .observed.composite.resource.spec | toYaml | nindent 12 }}
+          status:
+            debug: "XR labels test completed"
+
+---
+# Debug Claim
+apiVersion: test.kubecore.io/v1alpha1
+kind: DebugLabel
+metadata:
+  name: debug-xr-labels
+  namespace: default
+  labels:
+    test-type: "debug"
+spec:
+  testField: "debug-value"
+  compositionRef:
+    name: debug-labels

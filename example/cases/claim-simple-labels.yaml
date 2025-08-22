@@ -1,0 +1,34 @@
+# Simple Claim for XR Label Injection Testing - Updated Schema
+
+apiVersion: test.kubecore.io/v1alpha1
+kind: SimpleLabel
+metadata:
+  name: simple-label-test
+  namespace: default
+  labels:
+    existing-label: "preserved"
+    test-category: "xr-label-injection"
+  annotations:
+    kubecore.io/description: "Simple test for XR label injection with updated schema"
+spec:
+  projectName: "Demo-Project-123"
+  environment: "PRODUCTION"
+  compositionRef:
+    name: simple-labels
+
+---
+# Test with different namespace
+apiVersion: test.kubecore.io/v1alpha1
+kind: SimpleLabel
+metadata:
+  name: simple-label-namespaced
+  namespace: production
+  labels:
+    existing-ns-label: "preserved"
+  annotations:
+    kubecore.io/description: "Tests namespace detection with different namespace"
+spec:
+  projectName: "Namespace-Test-Project"
+  environment: "staging"
+  compositionRef:
+    name: simple-labels
